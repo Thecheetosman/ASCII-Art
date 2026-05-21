@@ -3,27 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ASCII</title>
+    <title>STRICT INDUSTRIAL ASCII v3.0</title>
     <style>
+        :root {
+            --bg-color: #050505;
+            --container-bg: #000;
+            --text-color: #8c8c8c;
+            --accent-color: #9e1a1a;
+            --border-color: #3a0000;
+            --pre-color: #d1d1d1;
+        }
+
+        body.light-theme {
+            --bg-color: #e0e0e0;
+            --container-bg: #ffffff;
+            --text-color: #333333;
+            --accent-color: #d32f2f;
+            --border-color: #9e9e9e;
+            --pre-color: #000000;
+        }
+
         body { 
             font-family: 'Courier New', Courier, monospace; 
-            background: #050505; 
-            color: #8c8c8c; 
+            background: var(--bg-color); 
+            color: var(--text-color); 
             text-align: center; 
             padding: 20px;
             text-transform: uppercase;
-            border: 8px solid #3a0000;
+            border: 8px solid var(--border-color);
             min-height: 90vh;
+            transition: all 0.3s ease;
         }
-        h2 { color: #9e1a1a; letter-spacing: 2px; border-bottom: 2px solid #3a0000; display: inline-block; }
+
+        body.drag-over {
+            background: var(--border-color);
+            border-style: dashed;
+        }
+
+        h2 { 
+            color: var(--accent-color); 
+            letter-spacing: 2px; 
+            border-bottom: 2px solid var(--border-color); 
+            display: inline-block; 
+            margin-top: 0;
+        }
         
         #output-container {
             margin-top: 20px;
-            background: #000;
-            border: 2px solid #333;
+            background: var(--container-bg);
+            border: 2px solid var(--border-color);
             display: inline-block;
             max-width: 95vw;
             overflow: auto;
+            position: relative;
         }
 
         pre { 
@@ -33,141 +65,338 @@
             letter-spacing: 0;
             white-space: pre;
             margin: 0;
-            padding: 10px;
-            color: #d1d1d1;
+            padding: 15px;
+            color: var(--pre-color);
             display: block;
             text-align: left;
         }
 
         .controls { 
             margin-bottom: 20px; 
-            background: #111;
+            background: rgba(0, 0, 0, 0.5);
             padding: 15px;
             display: inline-block;
-            border: 1px solid #3a0000;
+            border: 1px solid var(--border-color);
+            max-width: 900px;
+            width: 100%;
         }
-        button, input, select { 
-            padding: 8px; 
+
+        .control-group {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        /* Special style for the new video controls */
+        #videoControls {
+            background: rgba(158, 26, 26, 0.05);
+            border: 1px dashed var(--accent-color);
+            padding: 10px;
+            display: none; /* Hidden until video is uploaded */
+            width: 95%;
+            margin: 0 auto 15px auto;
+        }
+
+        button, input[type="file"], select { 
+            padding: 8px 12px; 
             font-family: 'Courier New', Courier, monospace; 
-            margin: 5px; 
-            background: #000;
-            color: #9e1a1a;
-            border: 1px solid #444;
+            background: var(--container-bg);
+            color: var(--accent-color);
+            border: 1px solid var(--border-color);
             font-weight: bold;
             text-transform: uppercase;
+            transition: all 0.2s;
         }
-        button:hover { background: #9e1a1a; color: #000; cursor: pointer; }
+
+        button:hover, input[type="file"]:hover::-webkit-file-upload-button { 
+            background: var(--accent-color); 
+            color: #fff; 
+            cursor: pointer; 
+        }
+
+        input[type="file"]::-webkit-file-upload-button {
+            background: var(--container-bg);
+            color: var(--accent-color);
+            border: 1px solid var(--border-color);
+            padding: 4px 8px;
+            font-family: inherit;
+            cursor: pointer;
+        }
         
-        label { margin: 0 10px; }
+        label { display: flex; align-items: center; gap: 5px; font-size: 14px; }
+        
+        .slider-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        input[type="range"] { accent-color: var(--accent-color); }
+        input[type="checkbox"] { accent-color: var(--accent-color); width: 16px; height: 16px; }
+
+        .value-display {
+            display: inline-block;
+            width: 30px;
+            text-align: left;
+            color: var(--accent-color);
+        }
     </style>
 </head>
 <body>
 
-    <h2>Terminal: Image-to-ASCII</h2>
+    <h2>Terminal: Media-to-ASCII</h2>
     
     <div class="controls">
-        <input type="file" id="upload" accept="image/*">
-        <br>
-        <label>Width: <input type="range" id="widthSlider" min="20" max="200" value="80"></label>
-        <span id="widthValue">80</span>
-        
-        <label id="thresholdContainer" style="display: none;">Threshold: <input type="range" id="thresholdSlider" min="1" max="254" value="128"></label>
-        <span id="thresholdValue" style="display: none;">128</span>
+        <div class="control-group">
+            <input type="file" id="upload" accept="image/*,video/*" title="Drag & drop images or videos">
+            
+            <select id="charMode">
+                <option value="detailed">Mode: Detailed ASCII</option>
+                <option value="blocks">Mode: Unicode Blocks</option>
+                <option value="standard">Mode: Standard ASCII</option>
+                <option value="braille">Mode: Braille (Dot Art)</option>
+            </select>
 
-        <label><input type="checkbox" id="invertCheck"> Invert</label>
+            <label><input type="checkbox" id="invertCheck"> Invert Colors</label>
+            <label><input type="checkbox" id="themeCheck"> Light Preview</label>
+        </div>
 
-        <select id="charMode">
-            <option value="blocks">Mode: Unicode Blocks (Straightest)</option>
-            <option value="standard">Mode: Standard ASCII</option>
-            <option value="braille">Mode: Braille (Dot Art)</option>
-        </select>
+        <div class="control-group" id="videoControls">
+            <button id="playPauseBtn" style="width: 100px;">[ PLAY ]</button>
+            <div class="slider-wrapper" style="flex-grow: 1;">
+                <input type="range" id="videoSlider" min="0" max="100" step="0.05" value="0" style="width: 100%;">
+            </div>
+            <span class="value-display" id="timeDisplay" style="width: 100px; text-align: right;">0.0s / 0.0s</span>
+        </div>
 
-        <button id="copyBtn">Copy Output</button>
+        <div class="control-group">
+            <div class="slider-wrapper">
+                <label>Width:</label>
+                <input type="range" id="widthSlider" min="20" max="300" value="100">
+                <span class="value-display" id="widthValue">100</span>
+            </div>
+
+            <div class="slider-wrapper">
+                <label>Contrast:</label>
+                <input type="range" id="contrastSlider" min="50" max="200" value="100">
+                <span class="value-display" id="contrastValue">100</span>
+            </div>
+            
+            <div class="slider-wrapper" id="thresholdContainer" style="display: none;">
+                <label>Braille Threshold:</label>
+                <input type="range" id="thresholdSlider" min="1" max="254" value="128">
+                <span class="value-display" id="thresholdValue">128</span>
+            </div>
+        </div>
+
+        <div class="control-group" style="margin-bottom: 0;">
+            <button id="copyBtn">[ COPY FRAME ]</button>
+            <button id="downloadBtn">[ DOWNLOAD FRAME .TXT ]</button>
+        </div>
     </div>
 
+    <br>
+
     <div id="output-container">
-        <pre id="output">WAITING FOR INPUT...</pre>
+        <pre id="output">WAITING FOR INPUT... (DRAG AND DROP IMAGE OR VIDEO HERE)</pre>
     </div>
 
     <script>
+        // DOM Elements
         const upload = document.getElementById('upload');
         const output = document.getElementById('output');
         const widthSlider = document.getElementById('widthSlider');
         const widthValue = document.getElementById('widthValue');
+        const contrastSlider = document.getElementById('contrastSlider');
+        const contrastValue = document.getElementById('contrastValue');
         const thresholdSlider = document.getElementById('thresholdSlider');
         const thresholdValue = document.getElementById('thresholdValue');
         const thresholdContainer = document.getElementById('thresholdContainer');
         const charMode = document.getElementById('charMode');
         const invertCheck = document.getElementById('invertCheck');
+        const themeCheck = document.getElementById('themeCheck');
         const copyBtn = document.getElementById('copyBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        
+        // Video specific elements
+        const videoControls = document.getElementById('videoControls');
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const videoSlider = document.getElementById('videoSlider');
+        const timeDisplay = document.getElementById('timeDisplay');
 
+        // Core Configuration
         const ramps = {
             standard: " .:-=+*#%@",
+            detailed: " .'`^\",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$",
             blocks: " ░▒▓█"
         };
 
         const brailleMap = [
-            [0, 0, 0x01],[1, 0, 0x08],
-            [0, 1, 0x02],[1, 1, 0x10],
-            [0, 2, 0x04],[1, 2, 0x20],
+            [0, 0, 0x01], [1, 0, 0x08],
+            [0, 1, 0x02], [1, 1, 0x10],
+            [0, 2, 0x04], [1, 2, 0x20],
             [0, 3, 0x40], [1, 3, 0x80]
         ];
 
+        // Media State
         let img = new Image();
+        let video = document.createElement('video');
+        video.muted = true; // Prevents autoplay restrictions
+        video.playsInline = true;
+        
+        let isVideo = false;
+        let currentMediaUrl = null;
+        let drawTimeout;
+        let lastDrawTime = 0;
+
+        // --- Drag and Drop & Upload Logic ---
+        document.body.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            document.body.classList.add('drag-over');
+        });
+
+        document.body.addEventListener('dragleave', () => {
+            document.body.classList.remove('drag-over');
+        });
+
+        document.body.addEventListener('drop', (e) => {
+            e.preventDefault();
+            document.body.classList.remove('drag-over');
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                loadMedia(e.dataTransfer.files[0]);
+            }
+        });
 
         upload.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (event) => { img.src = event.target.result; };
-            reader.readAsDataURL(file);
+            if (e.target.files[0]) loadMedia(e.target.files[0]);
         });
+
+        function loadMedia(file) {
+            if (currentMediaUrl) URL.revokeObjectURL(currentMediaUrl);
+            currentMediaUrl = URL.createObjectURL(file);
+
+            if (file.type.startsWith('video/')) {
+                isVideo = true;
+                videoControls.style.display = 'flex';
+                output.textContent = "LOADING VIDEO...";
+                video.src = currentMediaUrl;
+                playPauseBtn.textContent = "[ PLAY ]";
+            } else if (file.type.startsWith('image/')) {
+                isVideo = false;
+                videoControls.style.display = 'none';
+                output.textContent = "LOADING IMAGE...";
+                img.src = currentMediaUrl;
+                video.pause();
+            } else {
+                alert('Please upload a valid image or video file.');
+            }
+        }
 
         img.onload = () => draw();
-        
-        widthSlider.addEventListener('input', () => { 
-            widthValue.textContent = widthSlider.value; 
-            draw(); 
-        });
 
-        thresholdSlider.addEventListener('input', () => { 
-            thresholdValue.textContent = thresholdSlider.value; 
-            draw(); 
-        });
-
-        invertCheck.addEventListener('change', draw);
-
-        charMode.addEventListener('change', (e) => {
-            if (e.target.value === 'braille') {
-                thresholdContainer.style.display = 'inline-block';
-                thresholdValue.style.display = 'inline-block';
-            } else {
-                thresholdContainer.style.display = 'none';
-                thresholdValue.style.display = 'none';
-            }
+        // --- Video Playback & Scrubbing Logic ---
+        video.addEventListener('loadedmetadata', () => {
+            videoSlider.max = video.duration;
+            updateTimeDisplay();
             draw();
         });
 
+        video.addEventListener('seeked', () => {
+            if (video.paused) draw(); // Draw the newly seeked frame
+        });
+
+        video.addEventListener('timeupdate', () => {
+            if (!video.paused) {
+                videoSlider.value = video.currentTime;
+                updateTimeDisplay();
+            }
+        });
+
+        playPauseBtn.addEventListener('click', () => {
+            if (video.paused) {
+                video.play();
+                playPauseBtn.textContent = "[ PAUSE ]";
+                requestAnimationFrame(playLoop);
+            } else {
+                video.pause();
+                playPauseBtn.textContent = "[ PLAY ]";
+            }
+        });
+
+        videoSlider.addEventListener('input', (e) => {
+            video.currentTime = e.target.value;
+            updateTimeDisplay();
+            if (video.paused) debouncedDraw();
+        });
+
+        function updateTimeDisplay() {
+            const cur = video.currentTime || 0;
+            const max = video.duration || 0;
+            timeDisplay.textContent = `${cur.toFixed(1)}s / ${max.toFixed(1)}s`;
+        }
+
+        // Throttle text rendering to ~16 FPS to prevent CPU melting
+        function playLoop(timestamp) {
+            if (video.paused || video.ended) {
+                if (video.ended) playPauseBtn.textContent = "[ PLAY ]";
+                return;
+            }
+            if (timestamp - lastDrawTime >= 60) {
+                draw();
+                lastDrawTime = timestamp;
+            }
+            requestAnimationFrame(playLoop);
+        }
+
+        // --- Settings Event Listeners ---
+        function debouncedDraw() {
+            clearTimeout(drawTimeout);
+            drawTimeout = setTimeout(draw, 30);
+        }
+        
+        widthSlider.addEventListener('input', () => { widthValue.textContent = widthSlider.value; debouncedDraw(); });
+        contrastSlider.addEventListener('input', () => { contrastValue.textContent = contrastSlider.value; debouncedDraw(); });
+        thresholdSlider.addEventListener('input', () => { thresholdValue.textContent = thresholdSlider.value; debouncedDraw(); });
+        invertCheck.addEventListener('change', draw);
+        themeCheck.addEventListener('change', (e) => { document.body.classList.toggle('light-theme', e.target.checked); });
+        charMode.addEventListener('change', (e) => {
+            thresholdContainer.style.display = e.target.value === 'braille' ? 'flex' : 'none';
+            draw();
+        });
+
+        // --- Main Rendering Logic ---
         function draw() {
-            if (!img.src) return;
+            const source = isVideo ? video : img;
+            const sWidth = isVideo ? video.videoWidth : img.width;
+            const sHeight = isVideo ? video.videoHeight : img.height;
+
+            if (!sWidth || !sHeight) return; // Ignore if media not fully loaded yet
+
             const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            
             const outWidthChars = parseInt(widthSlider.value);
+            const contrast = parseInt(contrastSlider.value);
             const mode = charMode.value;
             const invert = invertCheck.checked;
             
             let asciiStr = "";
 
+            ctx.filter = `contrast(${contrast}%)`;
+
             if (mode === 'braille') {
                 const fontAspectRatio = 0.5; 
-                const outHeightChars = Math.floor((img.height / img.width) * outWidthChars * fontAspectRatio);
+                const outHeightChars = Math.floor((sHeight / sWidth) * outWidthChars * fontAspectRatio);
                 
                 const pixelWidth = outWidthChars * 2;
                 const pixelHeight = outHeightChars * 4;
 
                 canvas.width = pixelWidth;
                 canvas.height = pixelHeight;
-                ctx.drawImage(img, 0, 0, pixelWidth, pixelHeight);
+                ctx.drawImage(source, 0, 0, pixelWidth, pixelHeight);
                 const pixels = ctx.getImageData(0, 0, pixelWidth, pixelHeight).data;
                 const threshold = parseInt(thresholdSlider.value);
 
@@ -186,33 +415,31 @@
                             const brightness = (0.299 * pixels[idx] + 0.587 * pixels[idx+1] + 0.114 * pixels[idx+2]);
                             
                             const isSolid = invert ? (brightness <= threshold) : (brightness > threshold);
-                            
-                            if (isSolid) {
-                                brailleChar += val;
-                            }
+                            if (isSolid) brailleChar += val;
                         }
                         asciiStr += String.fromCharCode(0x2800 + brailleChar);
                     }
                     asciiStr += "\n";
                 }
             } else {
-                const fontAspectRatio = 0.55; 
-                const pixelHeight = Math.floor((img.height / img.width) * outWidthChars * fontAspectRatio);
+                const fontAspectRatio = 0.45; 
+                const pixelHeight = Math.floor((sHeight / sWidth) * outWidthChars * fontAspectRatio);
                 
                 canvas.width = outWidthChars;
                 canvas.height = pixelHeight;
-                ctx.drawImage(img, 0, 0, outWidthChars, pixelHeight);
+                ctx.drawImage(source, 0, 0, outWidthChars, pixelHeight);
                 
                 const pixels = ctx.getImageData(0, 0, outWidthChars, pixelHeight).data;
                 let ramp = ramps[mode];
-                
-                if (invert) {
-                    ramp = ramp.split('').reverse().join('');
-                }
+                if (invert) ramp = ramp.split('').reverse().join('');
 
                 for (let y = 0; y < pixelHeight; y++) {
                     for (let x = 0; x < outWidthChars; x++) {
                         const i = (y * outWidthChars + x) * 4;
+                        if (pixels[i+3] === 0) {
+                            asciiStr += " ";
+                            continue;
+                        }
                         const brightness = (0.299 * pixels[i] + 0.587 * pixels[i+1] + 0.114 * pixels[i+2]);
                         const charIndex = Math.floor((brightness / 255) * (ramp.length - 1));
                         asciiStr += ramp[charIndex];
@@ -223,10 +450,28 @@
             output.textContent = asciiStr;
         }
 
+        // --- Export Logic ---
         copyBtn.addEventListener('click', () => {
+            if(!currentMediaUrl) return alert("Upload media first.");
             const forumReadyText = "```text\n" + output.textContent + "\n```";
             navigator.clipboard.writeText(forumReadyText);
-            alert("COPIED. MARKDOWN BLOCK APPLIED FOR FORUM POSTING.");
+            
+            const originalText = copyBtn.textContent;
+            copyBtn.textContent = "[ FRAME COPIED! ]";
+            setTimeout(() => copyBtn.textContent = originalText, 2000);
+        });
+
+        downloadBtn.addEventListener('click', () => {
+            if(!currentMediaUrl) return alert("Upload media first.");
+            const blob = new Blob([output.textContent], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = isVideo ? `ascii_frame_${video.currentTime.toFixed(2)}s.txt` : 'ascii_image.txt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         });
     </script>
 </body>
