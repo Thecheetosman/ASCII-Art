@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>STRICT INDUSTRIAL ASCII v6.0</title>
+    <title>STRICT INDUSTRIAL ASCII v7.0</title>
     <style>
         :root {
             --bg-color: #050505;
@@ -188,6 +188,7 @@
             <label><input type="checkbox" id="invertCheck"> Invert Colors</label>
             <label><input type="checkbox" id="themeCheck"> Light Preview</label>
             <label><input type="checkbox" id="ditherCheck"> Dithering</label>
+            <label><input type="checkbox" id="audioCheck"> 4-BIT AUDIO</label>
         </div>
 
         <div class="control-group" id="videoControls">
@@ -264,6 +265,7 @@
         const invertCheck = document.getElementById('invertCheck');
         const themeCheck = document.getElementById('themeCheck');
         const ditherCheck = document.getElementById('ditherCheck');
+        const audioCheck = document.getElementById('audioCheck');
         
         const copyBackticksBtn = document.getElementById('copyBackticksBtn');
         const copyTildesBtn = document.getElementById('copyTildesBtn');
@@ -294,6 +296,7 @@
 
         let img = new Image();
         let video = document.createElement('video');
+        video.crossOrigin = "anonymous";
         video.muted = true;
         video.playsInline = true;
         
@@ -301,6 +304,12 @@
         let currentMediaUrl = null;
         let drawTimeout;
         let lastDrawTime = 0;
+
+        // Audio Variables
+        let audioCtx = null;
+        let sourceNode = null;
+        let waveShaper = null;
+        let destNode = null;
 
         // Video Recording Variables
         let recordCanvas = document.createElement('canvas');
@@ -341,6 +350,14 @@
                 output.textContent = "LOADING VIDEO...";
                 video.src = currentMediaUrl;
                 playPauseBtn.textContent = "[ PLAY ]";
+                
+                // Re-evaluate audio state
+                if(audioCheck.checked) {
+                    video.muted = false;
+                    initAudio();
+                } else {
+                    video.muted = true;
+                }
             } else if (file.type.startsWith('image/')) {
                 isVideo = false;
                 videoControls.style.display = 'none';
@@ -374,6 +391,9 @@
 
         playPauseBtn.addEventListener('click', () => {
             if (video.paused) {
+                if (audioCheck.checked && audioCtx && audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
                 video.play();
                 playPauseBtn.textContent = "[ PAUSE ]";
                 requestAnimationFrame(playLoop);
@@ -384,7 +404,7 @@
         });
 
         videoSlider.addEventListener('input', (e) => {
-            if (isRecording) return; // Prevent scrubbing while recording
+            if (isRecording) return; 
             video.currentTime = e.target.value;
             updateTimeDisplay();
             if (video.paused) debouncedDraw();
@@ -406,7 +426,6 @@
                 }
                 return;
             }
-            // Approx 16-20fps to avoid destroying the CPU, run faster if recording to get smooth frames
             let delay = isRecording ? 30 : 60; 
             if (timestamp - lastDrawTime >= delay) {
                 draw();
@@ -422,6 +441,42 @@
             clearTimeout(drawTimeout);
             drawTimeout = setTimeout(draw, 30);
         }
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                sourceNode = audioCtx.createMediaElementSource(video);
+                waveShaper = audioCtx.createWaveShaper();
+                
+                // Construct a 4-bit quantization curve for aggressive destruction
+                const bits = 4;
+                const steps = Math.pow(2, bits);
+                const curve = new Float32Array(44100);
+                for(let i = 0; i < 44100; i++) {
+                    let x = (i * 2) / 44100 - 1;
+                    curve[i] = Math.round(x * steps) / steps;
+                }
+                waveShaper.curve = curve;
+                
+                destNode = audioCtx.createMediaStreamDestination();
+
+                sourceNode.connect(waveShaper);
+                waveShaper.connect(audioCtx.destination);
+                waveShaper.connect(destNode);
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        audioCheck.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                video.muted = false;
+                initAudio();
+            } else {
+                video.muted = true;
+            }
+        });
         
         widthSlider.addEventListener('input', () => { widthValue.textContent = widthSlider.value; debouncedDraw(); });
         ratioSlider.addEventListener('input', () => { ratioValue.textContent = ratioSlider.value; debouncedDraw(); });
@@ -610,7 +665,7 @@
             recordVideoBtn.style.color = "#ffffff";
             recordVideoBtn.style.backgroundColor = "#ff0000";
 
-            draw(); // Ensure current frame is processed to get dimensions
+            draw(); 
             const lines = output.textContent.split('\n');
             if(lines[lines.length-1] === '') lines.pop(); 
 
@@ -627,8 +682,17 @@
             recordCanvas.width = maxWidth + 30; 
             recordCanvas.height = (lines.length * lineHeight) + 30;
 
-            const stream = recordCanvas.captureStream(30);
-            mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+            const canvasStream = recordCanvas.captureStream(30);
+            let finalStream = canvasStream;
+
+            if (audioCheck.checked && audioCtx && destNode) {
+                const audioTracks = destNode.stream.getAudioTracks();
+                if (audioTracks.length > 0) {
+                    finalStream = new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]);
+                }
+            }
+
+            mediaRecorder = new MediaRecorder(finalStream, { mimeType: 'video/webm' });
             recordedChunks = [];
 
             mediaRecorder.ondataavailable = e => {
@@ -654,6 +718,9 @@
             };
 
             video.currentTime = 0;
+            if (audioCheck.checked && audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
             mediaRecorder.start();
             video.play();
             playPauseBtn.textContent = "[ PAUSE ]";
