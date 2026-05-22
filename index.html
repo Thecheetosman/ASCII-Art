@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>STRICT INDUSTRIAL ASCII v3.0</title>
+    <title>STRICT INDUSTRIAL ASCII v5.1</title>
     <style>
         :root {
             --bg-color: #050505;
@@ -61,7 +61,7 @@
         pre { 
             font-family: 'Courier New', Courier, monospace; 
             font-size: 10px; 
-            line-height: 1em;
+            line-height: 10px;
             letter-spacing: 0;
             white-space: pre;
             margin: 0;
@@ -90,17 +90,16 @@
             margin-bottom: 15px;
         }
 
-        /* Special style for the new video controls */
         #videoControls {
             background: rgba(158, 26, 26, 0.05);
             border: 1px dashed var(--accent-color);
             padding: 10px;
-            display: none; /* Hidden until video is uploaded */
+            display: none;
             width: 95%;
             margin: 0 auto 15px auto;
         }
 
-        button, input[type="file"], select { 
+        button, input[type="file"], input[type="number"], input[type="text"], select { 
             padding: 8px 12px; 
             font-family: 'Courier New', Courier, monospace; 
             background: var(--container-bg);
@@ -115,6 +114,14 @@
             background: var(--accent-color); 
             color: #fff; 
             cursor: pointer; 
+        }
+
+        input[type="number"] {
+            width: 80px;
+        }
+
+        input[type="text"] {
+            width: 150px;
         }
 
         input[type="file"]::-webkit-file-upload-button {
@@ -139,9 +146,29 @@
 
         .value-display {
             display: inline-block;
-            width: 30px;
+            width: 40px;
             text-align: left;
             color: var(--accent-color);
+        }
+
+        #charCountDisplay {
+            font-weight: bold;
+            padding: 4px 8px;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .limit-exceeded {
+            color: #ff0000 !important;
+            border-color: #ff0000 !important;
+            background: rgba(255, 0, 0, 0.1);
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
         }
     </style>
 </head>
@@ -155,13 +182,17 @@
             
             <select id="charMode">
                 <option value="detailed">Mode: Detailed ASCII</option>
-                <option value="blocks">Mode: Unicode Blocks</option>
                 <option value="standard">Mode: Standard ASCII</option>
+                <option value="blocks">Mode: Unicode Blocks</option>
                 <option value="braille">Mode: Braille (Dot Art)</option>
+                <option value="custom">Mode: Custom Input</option>
             </select>
+
+            <input type="text" id="customInput" value=" .-=+*#%@" style="display: none;" title="Custom character ramp from dark to light">
 
             <label><input type="checkbox" id="invertCheck"> Invert Colors</label>
             <label><input type="checkbox" id="themeCheck"> Light Preview</label>
+            <label><input type="checkbox" id="ditherCheck"> Dithering</label>
         </div>
 
         <div class="control-group" id="videoControls">
@@ -180,21 +211,37 @@
             </div>
 
             <div class="slider-wrapper">
+                <label>Aspect:</label>
+                <input type="range" id="ratioSlider" min="0.1" max="1.0" step="0.01" value="0.45">
+                <span class="value-display" id="ratioValue">0.45</span>
+            </div>
+
+            <div class="slider-wrapper">
                 <label>Contrast:</label>
                 <input type="range" id="contrastSlider" min="50" max="200" value="100">
                 <span class="value-display" id="contrastValue">100</span>
             </div>
             
             <div class="slider-wrapper" id="thresholdContainer" style="display: none;">
-                <label>Braille Threshold:</label>
+                <label>Braille Thrsh:</label>
                 <input type="range" id="thresholdSlider" min="1" max="254" value="128">
                 <span class="value-display" id="thresholdValue">128</span>
             </div>
         </div>
 
         <div class="control-group" style="margin-bottom: 0;">
-            <button id="copyBtn">[ COPY FRAME ]</button>
-            <button id="downloadBtn">[ DOWNLOAD FRAME .TXT ]</button>
+            <div class="slider-wrapper">
+                <label>Limit:</label>
+                <input type="number" id="charLimitInput" value="2000" min="0" title="Set to 0 to disable limit">
+            </div>
+            <span id="charCountDisplay">0 / 2000 CHARS</span>
+            
+            <div style="flex-grow: 1;"></div>
+            
+            <button id="copyBackticksBtn">[ COPY ``` ]</button>
+            <button id="copyTildesBtn">[ COPY ~~~ ]</button>
+            <button id="downloadBtn">[ DL .TXT ]</button>
+            <button id="downloadPngBtn">[ DL .PNG ]</button>
         </div>
     </div>
 
@@ -205,32 +252,39 @@
     </div>
 
     <script>
-        // DOM Elements
         const upload = document.getElementById('upload');
         const output = document.getElementById('output');
         const widthSlider = document.getElementById('widthSlider');
         const widthValue = document.getElementById('widthValue');
+        const ratioSlider = document.getElementById('ratioSlider');
+        const ratioValue = document.getElementById('ratioValue');
         const contrastSlider = document.getElementById('contrastSlider');
         const contrastValue = document.getElementById('contrastValue');
         const thresholdSlider = document.getElementById('thresholdSlider');
         const thresholdValue = document.getElementById('thresholdValue');
         const thresholdContainer = document.getElementById('thresholdContainer');
         const charMode = document.getElementById('charMode');
+        const customInput = document.getElementById('customInput');
         const invertCheck = document.getElementById('invertCheck');
         const themeCheck = document.getElementById('themeCheck');
-        const copyBtn = document.getElementById('copyBtn');
-        const downloadBtn = document.getElementById('downloadBtn');
+        const ditherCheck = document.getElementById('ditherCheck');
         
-        // Video specific elements
+        const copyBackticksBtn = document.getElementById('copyBackticksBtn');
+        const copyTildesBtn = document.getElementById('copyTildesBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const downloadPngBtn = document.getElementById('downloadPngBtn');
+        
+        const charLimitInput = document.getElementById('charLimitInput');
+        const charCountDisplay = document.getElementById('charCountDisplay');
+        
         const videoControls = document.getElementById('videoControls');
         const playPauseBtn = document.getElementById('playPauseBtn');
         const videoSlider = document.getElementById('videoSlider');
         const timeDisplay = document.getElementById('timeDisplay');
 
-        // Core Configuration
         const ramps = {
             standard: " .:-=+*#%@",
-            detailed: " .'`^\",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$",
+            detailed: " .'`^\\\",:;Il!i><~+_-?][}{1)(|\\\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$",
             blocks: " ░▒▓█"
         };
 
@@ -241,10 +295,9 @@
             [0, 3, 0x40], [1, 3, 0x80]
         ];
 
-        // Media State
         let img = new Image();
         let video = document.createElement('video');
-        video.muted = true; // Prevents autoplay restrictions
+        video.muted = true;
         video.playsInline = true;
         
         let isVideo = false;
@@ -252,7 +305,6 @@
         let drawTimeout;
         let lastDrawTime = 0;
 
-        // --- Drag and Drop & Upload Logic ---
         document.body.addEventListener('dragover', (e) => {
             e.preventDefault();
             document.body.classList.add('drag-over');
@@ -291,13 +343,12 @@
                 img.src = currentMediaUrl;
                 video.pause();
             } else {
-                alert('Please upload a valid image or video file.');
+                alert('Please upload a valid fucking image or video file.');
             }
         }
 
         img.onload = () => draw();
 
-        // --- Video Playback & Scrubbing Logic ---
         video.addEventListener('loadedmetadata', () => {
             videoSlider.max = video.duration;
             updateTimeDisplay();
@@ -305,7 +356,7 @@
         });
 
         video.addEventListener('seeked', () => {
-            if (video.paused) draw(); // Draw the newly seeked frame
+            if (video.paused) draw(); 
         });
 
         video.addEventListener('timeupdate', () => {
@@ -338,7 +389,6 @@
             timeDisplay.textContent = `${cur.toFixed(1)}s / ${max.toFixed(1)}s`;
         }
 
-        // Throttle text rendering to ~16 FPS to prevent CPU melting
         function playLoop(timestamp) {
             if (video.paused || video.ended) {
                 if (video.ended) playPauseBtn.textContent = "[ PLAY ]";
@@ -351,54 +401,67 @@
             requestAnimationFrame(playLoop);
         }
 
-        // --- Settings Event Listeners ---
         function debouncedDraw() {
             clearTimeout(drawTimeout);
             drawTimeout = setTimeout(draw, 30);
         }
         
         widthSlider.addEventListener('input', () => { widthValue.textContent = widthSlider.value; debouncedDraw(); });
+        ratioSlider.addEventListener('input', () => { ratioValue.textContent = ratioSlider.value; debouncedDraw(); });
         contrastSlider.addEventListener('input', () => { contrastValue.textContent = contrastSlider.value; debouncedDraw(); });
         thresholdSlider.addEventListener('input', () => { thresholdValue.textContent = thresholdSlider.value; debouncedDraw(); });
+        charLimitInput.addEventListener('input', debouncedDraw);
+        customInput.addEventListener('input', debouncedDraw);
         invertCheck.addEventListener('change', draw);
+        ditherCheck.addEventListener('change', draw);
         themeCheck.addEventListener('change', (e) => { document.body.classList.toggle('light-theme', e.target.checked); });
         charMode.addEventListener('change', (e) => {
             thresholdContainer.style.display = e.target.value === 'braille' ? 'flex' : 'none';
+            customInput.style.display = e.target.value === 'custom' ? 'inline-block' : 'none';
+            if(e.target.value === 'braille' && parseFloat(ratioSlider.value) < 0.48) {
+                ratioSlider.value = 0.50;
+                ratioValue.textContent = "0.50";
+            }
             draw();
         });
 
-        // --- Main Rendering Logic ---
         function draw() {
             const source = isVideo ? video : img;
             const sWidth = isVideo ? video.videoWidth : img.width;
             const sHeight = isVideo ? video.videoHeight : img.height;
 
-            if (!sWidth || !sHeight) return; // Ignore if media not fully loaded yet
+            if (!sWidth || !sHeight) return; 
 
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d', { willReadFrequently: true });
             
             const outWidthChars = parseInt(widthSlider.value);
+            const fontAspectRatio = parseFloat(ratioSlider.value);
             const contrast = parseInt(contrastSlider.value);
             const mode = charMode.value;
             const invert = invertCheck.checked;
+            const dither = ditherCheck.checked;
             
             let asciiStr = "";
 
             ctx.filter = `contrast(${contrast}%)`;
 
             if (mode === 'braille') {
-                const fontAspectRatio = 0.5; 
                 const outHeightChars = Math.floor((sHeight / sWidth) * outWidthChars * fontAspectRatio);
-                
                 const pixelWidth = outWidthChars * 2;
                 const pixelHeight = outHeightChars * 4;
 
                 canvas.width = pixelWidth;
                 canvas.height = pixelHeight;
                 ctx.drawImage(source, 0, 0, pixelWidth, pixelHeight);
-                const pixels = ctx.getImageData(0, 0, pixelWidth, pixelHeight).data;
+                const imgData = ctx.getImageData(0, 0, pixelWidth, pixelHeight);
+                const pixels = imgData.data;
                 const threshold = parseInt(thresholdSlider.value);
+
+                let grayBuffer = new Float32Array(pixelWidth * pixelHeight);
+                for(let i=0; i < pixels.length; i+=4) {
+                    grayBuffer[i/4] = (0.299 * pixels[i] + 0.587 * pixels[i+1] + 0.114 * pixels[i+2]);
+                }
 
                 for (let y = 0; y < outHeightChars; y++) {
                     for (let x = 0; x < outWidthChars; x++) {
@@ -410,11 +473,24 @@
                             const dx = brailleMap[i][0];
                             const dy = brailleMap[i][1];
                             const val = brailleMap[i][2];
-
-                            const idx = ((py + dy) * pixelWidth + (px + dx)) * 4;
-                            const brightness = (0.299 * pixels[idx] + 0.587 * pixels[idx+1] + 0.114 * pixels[idx+2]);
                             
-                            const isSolid = invert ? (brightness <= threshold) : (brightness > threshold);
+                            const cx = px + dx;
+                            const cy = py + dy;
+                            const idx = cy * pixelWidth + cx;
+                            
+                            let oldBrightness = grayBuffer[idx];
+                            let isSolid = invert ? (oldBrightness <= threshold) : (oldBrightness > threshold);
+                            
+                            if (dither) {
+                                let newBrightness = isSolid ? (invert ? 0 : 255) : (invert ? 255 : 0);
+                                let err = oldBrightness - newBrightness;
+                                
+                                if(cx+1 < pixelWidth) grayBuffer[idx+1] += err * 7/16;
+                                if(cx-1 >= 0 && cy+1 < pixelHeight) grayBuffer[idx+pixelWidth-1] += err * 3/16;
+                                if(cy+1 < pixelHeight) grayBuffer[idx+pixelWidth] += err * 5/16;
+                                if(cx+1 < pixelWidth && cy+1 < pixelHeight) grayBuffer[idx+pixelWidth+1] += err * 1/16;
+                            }
+
                             if (isSolid) brailleChar += val;
                         }
                         asciiStr += String.fromCharCode(0x2800 + brailleChar);
@@ -422,7 +498,6 @@
                     asciiStr += "\n";
                 }
             } else {
-                const fontAspectRatio = 0.45; 
                 const pixelHeight = Math.floor((sHeight / sWidth) * outWidthChars * fontAspectRatio);
                 
                 canvas.width = outWidthChars;
@@ -430,48 +505,138 @@
                 ctx.drawImage(source, 0, 0, outWidthChars, pixelHeight);
                 
                 const pixels = ctx.getImageData(0, 0, outWidthChars, pixelHeight).data;
-                let ramp = ramps[mode];
+                let ramp = mode === 'custom' ? customInput.value : ramps[mode];
+                if (!ramp) ramp = " "; 
                 if (invert) ramp = ramp.split('').reverse().join('');
+
+                let grayBuffer = new Float32Array(outWidthChars * pixelHeight);
+                for(let i=0; i < pixels.length; i+=4) {
+                    grayBuffer[i/4] = pixels[i+3] === 0 ? 255 : (0.299 * pixels[i] + 0.587 * pixels[i+1] + 0.114 * pixels[i+2]);
+                }
+
+                let step = 255 / Math.max(1, (ramp.length - 1));
 
                 for (let y = 0; y < pixelHeight; y++) {
                     for (let x = 0; x < outWidthChars; x++) {
-                        const i = (y * outWidthChars + x) * 4;
-                        if (pixels[i+3] === 0) {
-                            asciiStr += " ";
-                            continue;
+                        const idx = y * outWidthChars + x;
+                        let oldBrightness = grayBuffer[idx];
+                        
+                        let charIndex = Math.round(oldBrightness / step);
+                        if (charIndex < 0) charIndex = 0;
+                        if (charIndex >= ramp.length) charIndex = ramp.length - 1;
+
+                        if (dither) {
+                            let newBrightness = charIndex * step;
+                            let err = oldBrightness - newBrightness;
+
+                            if(x+1 < outWidthChars) grayBuffer[idx+1] += err * 7/16;
+                            if(x-1 >= 0 && y+1 < pixelHeight) grayBuffer[idx+outWidthChars-1] += err * 3/16;
+                            if(y+1 < pixelHeight) grayBuffer[idx+outWidthChars] += err * 5/16;
+                            if(x+1 < outWidthChars && y+1 < pixelHeight) grayBuffer[idx+outWidthChars+1] += err * 1/16;
                         }
-                        const brightness = (0.299 * pixels[i] + 0.587 * pixels[i+1] + 0.114 * pixels[i+2]);
-                        const charIndex = Math.floor((brightness / 255) * (ramp.length - 1));
+
                         asciiStr += ramp[charIndex];
                     }
                     asciiStr += "\n";
                 }
             }
+            
             output.textContent = asciiStr;
+
+            const charLimit = parseInt(charLimitInput.value) || 0;
+            const currentLength = asciiStr.length;
+
+            if (charLimit > 0) {
+                charCountDisplay.textContent = `${currentLength} / ${charLimit} CHARS`;
+                if (currentLength > charLimit) {
+                    charCountDisplay.classList.add('limit-exceeded');
+                } else {
+                    charCountDisplay.classList.remove('limit-exceeded');
+                }
+            } else {
+                charCountDisplay.textContent = `${currentLength} CHARS`;
+                charCountDisplay.classList.remove('limit-exceeded');
+            }
         }
 
-        // --- Export Logic ---
-        copyBtn.addEventListener('click', () => {
-            if(!currentMediaUrl) return alert("Upload media first.");
+        copyBackticksBtn.addEventListener('click', () => {
+            if(!currentMediaUrl) return alert("Upload fucking media first.");
             const forumReadyText = "```text\n" + output.textContent + "\n```";
             navigator.clipboard.writeText(forumReadyText);
             
-            const originalText = copyBtn.textContent;
-            copyBtn.textContent = "[ FRAME COPIED! ]";
-            setTimeout(() => copyBtn.textContent = originalText, 2000);
+            const originalText = copyBackticksBtn.textContent;
+            copyBackticksBtn.textContent = "[ COPIED! ]";
+            setTimeout(() => copyBackticksBtn.textContent = originalText, 2000);
+        });
+
+        copyTildesBtn.addEventListener('click', () => {
+            if(!currentMediaUrl) return alert("Upload fucking media first.");
+            const forumReadyText = "~~~\n" + output.textContent + "\n~~~";
+            navigator.clipboard.writeText(forumReadyText);
+            
+            const originalText = copyTildesBtn.textContent;
+            copyTildesBtn.textContent = "[ COPIED! ]";
+            setTimeout(() => copyTildesBtn.textContent = originalText, 2000);
         });
 
         downloadBtn.addEventListener('click', () => {
-            if(!currentMediaUrl) return alert("Upload media first.");
+            if(!currentMediaUrl) return alert("Upload fucking media first.");
             const blob = new Blob([output.textContent], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = isVideo ? `ascii_frame_${video.currentTime.toFixed(2)}s.txt` : 'ascii_image.txt';
+            a.download = isVideo ? `ascii_frame_${video.currentTime.toFixed(2)}s.txt` : 'ascii_export.txt';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
+        });
+
+        downloadPngBtn.addEventListener('click', () => {
+            if(!output.textContent || output.textContent.includes("WAITING FOR INPUT")) {
+                alert("Render a fucking image first.");
+                return;
+            }
+
+            const lines = output.textContent.split('\n');
+            if(lines[lines.length-1] === '') lines.pop(); 
+
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            const fontSize = 10;
+            const lineHeight = 10;
+            ctx.font = `${fontSize}px 'Courier New', Courier, monospace`;
+            
+            let maxWidth = 0;
+            for(let line of lines) {
+                let metrics = ctx.measureText(line);
+                if(metrics.width > maxWidth) maxWidth = metrics.width;
+            }
+            
+            canvas.width = maxWidth + 30; 
+            canvas.height = (lines.length * lineHeight) + 30;
+            
+            const isLight = document.body.classList.contains('light-theme');
+            ctx.fillStyle = isLight ? '#ffffff' : '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = isLight ? '#000000' : '#d1d1d1';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.font = `${fontSize}px 'Courier New', Courier, monospace`;
+            
+            for(let i=0; i<lines.length; i++) {
+                ctx.fillText(lines[i], 15, 15 + (i * lineHeight));
+            }
+            
+            const url = canvas.toDataURL('image/png');
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = isVideo ? `ascii_frame_${video.currentTime.toFixed(2)}s.png` : 'ascii_export.png';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
         });
     </script>
 </body>
