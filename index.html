@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>STRICT INDUSTRIAL ASCII v5.1</title>
+    <title>STRICT INDUSTRIAL ASCII v6.0</title>
     <style>
         :root {
             --bg-color: #050505;
@@ -116,13 +116,8 @@
             cursor: pointer; 
         }
 
-        input[type="number"] {
-            width: 80px;
-        }
-
-        input[type="text"] {
-            width: 150px;
-        }
+        input[type="number"] { width: 80px; }
+        input[type="text"] { width: 150px; }
 
         input[type="file"]::-webkit-file-upload-button {
             background: var(--container-bg);
@@ -242,6 +237,7 @@
             <button id="copyTildesBtn">[ COPY ~~~ ]</button>
             <button id="downloadBtn">[ DL .TXT ]</button>
             <button id="downloadPngBtn">[ DL .PNG ]</button>
+            <button id="recordVideoBtn" style="display: none; border-color: #ff0000; color: #ff0000;">[ RECORD .WEBM ]</button>
         </div>
     </div>
 
@@ -273,6 +269,7 @@
         const copyTildesBtn = document.getElementById('copyTildesBtn');
         const downloadBtn = document.getElementById('downloadBtn');
         const downloadPngBtn = document.getElementById('downloadPngBtn');
+        const recordVideoBtn = document.getElementById('recordVideoBtn');
         
         const charLimitInput = document.getElementById('charLimitInput');
         const charCountDisplay = document.getElementById('charCountDisplay');
@@ -305,6 +302,13 @@
         let drawTimeout;
         let lastDrawTime = 0;
 
+        // Video Recording Variables
+        let recordCanvas = document.createElement('canvas');
+        let recordCtx = recordCanvas.getContext('2d');
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let isRecording = false;
+
         document.body.addEventListener('dragover', (e) => {
             e.preventDefault();
             document.body.classList.add('drag-over');
@@ -333,12 +337,14 @@
             if (file.type.startsWith('video/')) {
                 isVideo = true;
                 videoControls.style.display = 'flex';
+                recordVideoBtn.style.display = 'inline-block';
                 output.textContent = "LOADING VIDEO...";
                 video.src = currentMediaUrl;
                 playPauseBtn.textContent = "[ PLAY ]";
             } else if (file.type.startsWith('image/')) {
                 isVideo = false;
                 videoControls.style.display = 'none';
+                recordVideoBtn.style.display = 'none';
                 output.textContent = "LOADING IMAGE...";
                 img.src = currentMediaUrl;
                 video.pause();
@@ -356,7 +362,7 @@
         });
 
         video.addEventListener('seeked', () => {
-            if (video.paused) draw(); 
+            if (video.paused && !isRecording) draw(); 
         });
 
         video.addEventListener('timeupdate', () => {
@@ -378,6 +384,7 @@
         });
 
         videoSlider.addEventListener('input', (e) => {
+            if (isRecording) return; // Prevent scrubbing while recording
             video.currentTime = e.target.value;
             updateTimeDisplay();
             if (video.paused) debouncedDraw();
@@ -391,11 +398,21 @@
 
         function playLoop(timestamp) {
             if (video.paused || video.ended) {
-                if (video.ended) playPauseBtn.textContent = "[ PLAY ]";
+                if (video.ended) {
+                    playPauseBtn.textContent = "[ PLAY ]";
+                    if (isRecording) {
+                        mediaRecorder.stop();
+                    }
+                }
                 return;
             }
-            if (timestamp - lastDrawTime >= 60) {
+            // Approx 16-20fps to avoid destroying the CPU, run faster if recording to get smooth frames
+            let delay = isRecording ? 30 : 60; 
+            if (timestamp - lastDrawTime >= delay) {
                 draw();
+                if (isRecording) {
+                    paintRecordCanvas();
+                }
                 lastDrawTime = timestamp;
             }
             requestAnimationFrame(playLoop);
@@ -558,6 +575,90 @@
                 charCountDisplay.classList.remove('limit-exceeded');
             }
         }
+
+        function paintRecordCanvas() {
+            if(!output.textContent) return;
+            const lines = output.textContent.split('\n');
+            if(lines[lines.length-1] === '') lines.pop(); 
+
+            const fontSize = 10;
+            const lineHeight = 10;
+            
+            const isLight = document.body.classList.contains('light-theme');
+            recordCtx.fillStyle = isLight ? '#ffffff' : '#000000';
+            recordCtx.fillRect(0, 0, recordCanvas.width, recordCanvas.height);
+            
+            recordCtx.fillStyle = isLight ? '#000000' : '#d1d1d1';
+            recordCtx.textAlign = 'left';
+            recordCtx.textBaseline = 'top';
+            recordCtx.font = `${fontSize}px 'Courier New', Courier, monospace`;
+            
+            for(let i=0; i<lines.length; i++) {
+                recordCtx.fillText(lines[i], 15, 15 + (i * lineHeight));
+            }
+        }
+
+        recordVideoBtn.addEventListener('click', () => {
+            if(!isVideo) return alert("Upload a fucking video first.");
+            if(isRecording) return;
+            
+            let confirmMsg = "This will rewind your video and record every frame as an ASCII output into a .webm file. It is heavy on the CPU. Do you wish to proceed?";
+            if(!confirm(confirmMsg)) return;
+
+            isRecording = true;
+            recordVideoBtn.textContent = "[ RECORDING... ]";
+            recordVideoBtn.style.color = "#ffffff";
+            recordVideoBtn.style.backgroundColor = "#ff0000";
+
+            draw(); // Ensure current frame is processed to get dimensions
+            const lines = output.textContent.split('\n');
+            if(lines[lines.length-1] === '') lines.pop(); 
+
+            const fontSize = 10;
+            const lineHeight = 10;
+            recordCtx.font = `${fontSize}px 'Courier New', Courier, monospace`;
+            
+            let maxWidth = 0;
+            for(let line of lines) {
+                let metrics = recordCtx.measureText(line);
+                if(metrics.width > maxWidth) maxWidth = metrics.width;
+            }
+            
+            recordCanvas.width = maxWidth + 30; 
+            recordCanvas.height = (lines.length * lineHeight) + 30;
+
+            const stream = recordCanvas.captureStream(30);
+            mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+            recordedChunks = [];
+
+            mediaRecorder.ondataavailable = e => {
+                if (e.data.size > 0) recordedChunks.push(e.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'ascii_rendered_video.webm';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                isRecording = false;
+                recordVideoBtn.textContent = "[ RECORD .WEBM ]";
+                recordVideoBtn.style.color = "#ff0000";
+                recordVideoBtn.style.backgroundColor = "transparent";
+                alert("Fucking done. Download should start now.");
+            };
+
+            video.currentTime = 0;
+            mediaRecorder.start();
+            video.play();
+            playPauseBtn.textContent = "[ PAUSE ]";
+            requestAnimationFrame(playLoop);
+        });
 
         copyBackticksBtn.addEventListener('click', () => {
             if(!currentMediaUrl) return alert("Upload fucking media first.");
