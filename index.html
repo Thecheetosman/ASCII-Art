@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>STRICT INDUSTRIAL ASCII v10.0</title>
+    <title>STRICT INDUSTRIAL ASCII v15.0</title>
     <style>
         :root {
             --bg-color: #050505;
@@ -272,7 +272,7 @@
             <div class="slider-wrapper" style="flex-grow: 1;">
                 <input type="range" id="videoSlider" min="0" max="100" step="0.05" value="0" style="width: 100%;">
             </div>
-            <span class="value-display" id="timeDisplay" style="width: 100px; text-align: right;">0.0s / 0.0s</span>
+            <span id="timeDisplay" style="width: 250px; text-align: right; font-family: monospace;">0.0s / 0.0s (F: 0/0)</span>
             
             <div class="slider-wrapper">
                 <label>Trim In (s):</label>
@@ -870,10 +870,19 @@
             if (video.paused) debouncedDraw();
         });
 
+        // FPS modification binds timeline updates immediately
+        exportFps.addEventListener('input', () => {
+            updateTimeDisplay();
+            debouncedDraw();
+        });
+
         function updateTimeDisplay() {
             const cur = video.currentTime || 0;
             const max = video.duration || 0;
-            timeDisplay.textContent = `${cur.toFixed(1)}s / ${max.toFixed(1)}s`;
+            const fps = parseFloat(exportFps.value) || 10;
+            const curFrame = Math.round(cur * fps);
+            const totalFrames = Math.round(max * fps);
+            timeDisplay.textContent = `${cur.toFixed(1)}s / ${max.toFixed(1)}s (F: ${curFrame}/${totalFrames})`;
         }
 
         function playLoop(timestamp) {
