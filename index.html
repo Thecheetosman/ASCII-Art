@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>STRICT INDUSTRIAL ASCII v10.1</title>
+    <title>STRICT INDUSTRIAL ASCII v11.0</title>
     <style>
         :root {
             --bg-color: #050505;
@@ -14,7 +14,7 @@
             --pre-color: #d1d1d1;
             --font-size: 10px;
         }
-/* My eyes! */
+
         body.light-theme {
             --bg-color: #e0e0e0;
             --container-bg: #ffffff;
@@ -229,6 +229,7 @@
     <div class="controls">
         <div class="control-group">
             <input type="file" id="upload" accept="image/*,video/*" title="Drag & drop images or videos">
+            <button id="webcamBtn" style="border-color: #ff0055; color: #ff0055;">[ USE WEBCAM ]</button>
             
             <select id="charMode">
                 <option value="detailed">Mode: Detailed ASCII</option>
@@ -252,6 +253,11 @@
                 <option value="green">Style: VT100 Green</option>
                 <option value="amber">Style: VT220 Amber</option>
                 <option value="alert">Style: Red Alert</option>
+            </select>
+
+            <select id="visType">
+                <option value="scope">Vis: Oscilloscope</option>
+                <option value="eq">Vis: Spectral EQ</option>
             </select>
 
             <label><input type="checkbox" id="scanlineCheck"> CRT Scanlines</label>
@@ -305,6 +311,14 @@
                 <span class="value-display" id="widthValue">100</span>
             </div>
 
+            <select id="aspectPreset">
+                <option value="manual">Aspect: Manual</option>
+                <option value="terminal">Aspect: Terminal (~0.45)</option>
+                <option value="discord">Aspect: Discord (~0.43)</option>
+                <option value="slack">Aspect: Slack (~0.50)</option>
+                <option value="github">Aspect: GitHub (~0.48)</option>
+            </select>
+
             <div class="slider-wrapper">
                 <label>Aspect:</label>
                 <input type="range" id="ratioSlider" min="0.1" max="1.0" step="0.01" value="0.45">
@@ -321,6 +335,12 @@
                 <label>Braille Thrsh:</label>
                 <input type="range" id="thresholdSlider" min="1" max="254" value="128">
                 <span class="value-display" id="thresholdValue">128</span>
+            </div>
+
+            <div class="slider-wrapper">
+                <label>Glitch:</label>
+                <input type="range" id="corruptionSlider" min="0" max="100" value="0">
+                <span class="value-display" id="corruptionValue">0</span>
             </div>
 
             <div class="slider-wrapper">
@@ -344,6 +364,7 @@
             <button id="copyAnsiBtn" style="border-color: #00ff00; color: #00ff00;">[ COPY ANSI ]</button>
             <button id="downloadBtn">[ DL .TXT ]</button>
             <button id="downloadPngBtn">[ DL .PNG ]</button>
+            <button id="downloadHtmlBtn" style="border-color: #00ffff; color: #00ffff;">[ DL .HTML ]</button>
             <button id="recordVideoBtn" style="display: none; border-color: #ff0000; color: #ff0000;">[ RECORD .WEBM ]</button>
             <button id="helpBtn" style="border-color: #00ffff; color: #00ffff;">[ HELP / KEYBINDS ]</button>
         </div>
@@ -362,8 +383,9 @@
             <h3 style="color: var(--accent-color); margin-top: 0; border-bottom: 2px solid var(--border-color); padding-bottom: 5px;">TERMINAL MANUAL & KEYBINDS</h3>
             
             <p style="font-weight: bold; color: var(--accent-color); margin-bottom: 5px;">[ INPUT & FILE HANDLING ]</p>
-            <p style="margin: 0 0 15px 0;">- Drag and drop images or videos anywhere on screen to load them.</p>
-            <p style="margin: 0 0 15px 0;">- Or use the file uploader at the top left of the workspace.</p>
+            <p style="margin: 0 0 5px 0;">- Drag and drop images or videos anywhere on screen to load them.</p>
+            <p style="margin: 0 0 5px 0;">- Or use the file uploader at the top left of the workspace.</p>
+            <p style="margin: 0 0 15px 0;">- <span style="font-weight: bold;">USE WEBCAM</span> opens your raw video stream directly inside the processor.</p>
 
             <p style="font-weight: bold; color: var(--accent-color); margin-bottom: 5px;">[ KEYBOARD HOTKEYS ]</p>
             <p style="margin: 0 0 5px 0;">- <span style="color: var(--accent-color); font-weight: bold;">SPACEBAR</span> : Play / Pause video playback.</p>
@@ -375,7 +397,8 @@
             <p style="margin: 0 0 5px 0;">- <span style="font-weight: bold;">COPY ``` / ~~~</span> : Copies markdown block formats. Tildes prevent backtick collision.</p>
             <p style="margin: 0 0 5px 0;">- <span style="font-weight: bold;">COPY ANSI</span> : Copies 24-bit terminal RGB escape sequences to clipboard.</p>
             <p style="margin: 0 0 5px 0;">- <span style="font-weight: bold;">EXPORT SEQUENTIAL FRAMES</span> : Step-renders video directly. Select local directory folder for seamless writes (Chrome/Edge only) or run sequential downloads.</p>
-            <p style="margin: 0 0 15px 0;">- <span style="font-weight: bold;">RECORD .WEBM</span> : Captures frames real-time and mixes the crushed 4-bit audio directly into a synchronized WebM video file.</p>
+            <p style="margin: 0 0 5px 0;">- <span style="font-weight: bold;">RECORD .WEBM</span> : Captures frames real-time and mixes the crushed 4-bit audio directly into a synchronized WebM video file.</p>
+            <p style="margin: 0 0 15px 0;">- <span style="font-weight: bold;">DL .HTML</span> : Compiles a fully styled, color-grouped HTML copy of your frame.</p>
 
             <p style="font-weight: bold; color: var(--accent-color); margin-bottom: 5px;">[ TIMELINE TIMING TRIM ]</p>
             <p style="margin: 0 0 15px 0;">- Restrict standard loop playback, sequential frame exports, and WebM video recordings using the Trim In and Trim Out numeric range markers.</p>
@@ -416,6 +439,10 @@
         const scanlineCheck = document.getElementById('scanlineCheck');
         const reactiveCheck = document.getElementById('reactiveCheck');
         const reactiveControls = document.getElementById('reactiveControls');
+        const aspectPreset = document.getElementById('aspectPreset');
+        const corruptionSlider = document.getElementById('corruptionSlider');
+        const corruptionValue = document.getElementById('corruptionValue');
+        const visType = document.getElementById('visType');
 
         const btnReactPump = document.getElementById('btnReactPump');
         const btnReactFlash = document.getElementById('btnReactFlash');
@@ -426,10 +453,12 @@
         const copyAnsiBtn = document.getElementById('copyAnsiBtn');
         const downloadBtn = document.getElementById('downloadBtn');
         const downloadPngBtn = document.getElementById('downloadPngBtn');
+        const downloadHtmlBtn = document.getElementById('downloadHtmlBtn');
         const recordVideoBtn = document.getElementById('recordVideoBtn');
         const helpBtn = document.getElementById('helpBtn');
         const helpModal = document.getElementById('helpModal');
         const closeHelpBtn = document.getElementById('closeHelpBtn');
+        const webcamBtn = document.getElementById('webcamBtn');
         
         const frameExportControls = document.getElementById('frameExportControls');
         const exportFormat = document.getElementById('exportFormat');
@@ -469,6 +498,13 @@
             alert: { bg: '#1a0000', cbg: '#050000', text: '#ff3333', accent: '#ff0000', border: '#800000', pre: '#ff3333' }
         };
 
+        const aspectRatios = {
+            terminal: 0.45,
+            discord: 0.43,
+            slack: 0.50,
+            github: 0.48
+        };
+
         let img = new Image();
         let video = document.createElement('video');
         video.crossOrigin = "anonymous";
@@ -501,8 +537,13 @@
         let exportFrameCount = 0;
         let dirHandle = null;
 
-        // ANSI Output Cache
+        // Webcam stream variables
+        let webcamStream = null;
+        let isWebcam = false;
+
+        // ANSI Output & HTML Export Cache
         let currentAnsiStr = "";
+        let currentHtmlStr = "";
 
         // Modular Audio Reactive State Flags
         let reactPumpActive = false;
@@ -533,9 +574,12 @@
                 reactPumpActive,
                 reactFlashActive,
                 reactGlitchActive,
-                fontSize: fontSizeSlider.value
+                fontSize: fontSizeSlider.value,
+                aspectPreset: aspectPreset.value,
+                corruption: corruptionSlider.value,
+                visType: visType.value
             };
-            localStorage.setItem('ascii_terminal_settings_v5', JSON.stringify(settings));
+            localStorage.setItem('ascii_terminal_settings_v6', JSON.stringify(settings));
         }
 
         function applyPreset(presetName) {
@@ -550,14 +594,16 @@
         }
 
         function loadSettings() {
-            const data = localStorage.getItem('ascii_terminal_settings_v5');
+            const data = localStorage.getItem('ascii_terminal_settings_v6');
             if (!data) return;
             try {
                 const s = JSON.parse(data);
                 widthSlider.value = s.width || 100;
                 widthValue.textContent = s.width || 100;
+                
                 ratioSlider.value = s.ratio || 0.45;
                 ratioValue.textContent = s.ratio || 0.45;
+                
                 contrastSlider.value = s.contrast || 100;
                 contrastValue.textContent = s.contrast || 100;
                 thresholdSlider.value = s.threshold || 128;
@@ -586,6 +632,20 @@
                 fontSizeValue.textContent = s.fontSize || 10;
                 document.documentElement.style.setProperty('--font-size', `${fontSizeSlider.value}px`);
 
+                aspectPreset.value = s.aspectPreset || 'manual';
+                corruptionSlider.value = s.corruption || 0;
+                corruptionValue.textContent = s.corruption || 0;
+                visType.value = s.visType || 'scope';
+
+                // Sync aspect preset slider lock
+                if (aspectPreset.value !== 'manual') {
+                    ratioSlider.disabled = true;
+                    ratioSlider.value = aspectRatios[aspectPreset.value];
+                    ratioValue.textContent = aspectRatios[aspectPreset.value];
+                } else {
+                    ratioSlider.disabled = false;
+                }
+
                 // Sync button states
                 btnReactPump.classList.toggle('active', reactPumpActive);
                 btnReactPump.textContent = reactPumpActive ? "[ PUMP: ON ]" : "[ PUMP: OFF ]";
@@ -611,7 +671,7 @@
                 charMode, customInput, invertCheck, themeCheck, ditherCheck,
                 audioCheck, charLimitInput, exportFormat, exportFps,
                 startTimeInput, endTimeInput, terminalPreset, scanlineCheck,
-                reactiveCheck, fontSizeSlider
+                reactiveCheck, fontSizeSlider, aspectPreset, corruptionSlider, visType
             ];
             inputs.forEach(input => {
                 input.addEventListener('change', saveSettings);
@@ -655,6 +715,72 @@
 
         closeHelpBtn.addEventListener('click', closeHelp);
 
+        // Webcam Live Capture Observers
+        webcamBtn.addEventListener('click', async () => {
+            if (isWebcam) {
+                stopWebcam();
+                return;
+            }
+
+            try {
+                webcamStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                video.srcObject = webcamStream;
+                video.play();
+                isVideo = true;
+                isWebcam = true;
+                
+                videoControls.style.display = 'flex';
+                frameExportControls.style.display = 'none'; 
+                recordVideoBtn.style.display = 'none'; 
+                
+                videoSlider.style.display = 'none';
+                startTimeInput.disabled = true;
+                endTimeInput.disabled = true;
+                
+                webcamBtn.textContent = "[ STOP WEBCAM ]";
+                webcamBtn.style.backgroundColor = "#ff0000";
+                webcamBtn.style.color = "#ffffff";
+                
+                playPauseBtn.style.display = 'none';
+                stopBtn.style.display = 'none';
+                prevFrameBtn.style.display = 'none';
+                nextFrameBtn.style.display = 'none';
+                
+                requestAnimationFrame(playLoop);
+            } catch (e) {
+                console.error(e);
+                alert("Could not access your fucking webcam.");
+            }
+        });
+
+        function stopWebcam() {
+            if (webcamStream) {
+                webcamStream.getTracks().forEach(track => track.stop());
+                webcamStream = null;
+            }
+            video.srcObject = null;
+            isWebcam = false;
+            isVideo = false;
+            
+            videoControls.style.display = 'none';
+            frameExportControls.style.display = 'none';
+            recordVideoBtn.style.display = 'none';
+            videoSlider.style.display = 'inline-block';
+            startTimeInput.disabled = false;
+            endTimeInput.disabled = false;
+            
+            playPauseBtn.style.display = 'inline-block';
+            stopBtn.style.display = 'inline-block';
+            prevFrameBtn.style.display = 'inline-block';
+            nextFrameBtn.style.display = 'inline-block';
+            
+            webcamBtn.textContent = "[ USE WEBCAM ]";
+            webcamBtn.style.backgroundColor = "transparent";
+            webcamBtn.style.color = "#ff0055";
+            
+            output.textContent = "WAITING FOR INPUT... (DRAG AND DROP IMAGE OR VIDEO HERE)";
+        }
+
         document.body.addEventListener('dragover', (e) => {
             e.preventDefault();
             document.body.classList.add('drag-over');
@@ -677,6 +803,7 @@
         });
 
         function loadMedia(file) {
+            if (isWebcam) stopWebcam();
             if (currentMediaUrl) URL.revokeObjectURL(currentMediaUrl);
             currentMediaUrl = URL.createObjectURL(file);
 
@@ -898,22 +1025,25 @@
                 return;
             }
 
-            const startVal = parseFloat(startTimeInput.value) || 0;
-            const endVal = parseFloat(endTimeInput.value) || video.duration;
-            if (video.currentTime >= endVal) {
-                if (isRecording) {
-                    mediaRecorder.stop();
-                    return;
+            // Trim checks (not required for live webcam streams)
+            if (!isWebcam) {
+                const startVal = parseFloat(startTimeInput.value) || 0;
+                const endVal = parseFloat(endTimeInput.value) || video.duration;
+                if (video.currentTime >= endVal) {
+                    if (isRecording) {
+                        mediaRecorder.stop();
+                        return;
+                    }
+                    if (isExportingFrames) {
+                        isExportingFrames = false;
+                        exportFramesBtn.textContent = "[ EXPORT SEQUENTIAL FRAMES ]";
+                        exportFramesBtn.style.backgroundColor = "transparent";
+                        exportFramesBtn.style.color = "#ff9900";
+                        alert(`Fucking done. Successfully exported ${exportFrameCount} frames.`);
+                        return;
+                    }
+                    video.currentTime = startVal;
                 }
-                if (isExportingFrames) {
-                    isExportingFrames = false;
-                    exportFramesBtn.textContent = "[ EXPORT SEQUENTIAL FRAMES ]";
-                    exportFramesBtn.style.backgroundColor = "transparent";
-                    exportFramesBtn.style.color = "#ff9900";
-                    alert(`Fucking done. Successfully exported ${exportFrameCount} frames.`);
-                    return;
-                }
-                video.currentTime = startVal;
             }
 
             let delay = isRecording ? 30 : 60; 
@@ -1028,6 +1158,28 @@
             document.documentElement.style.setProperty('--font-size', `${val}px`);
         });
 
+        aspectPreset.addEventListener('change', (e) => {
+            const val = e.target.value;
+            if (val !== 'manual') {
+                ratioSlider.disabled = true;
+                const ratio = aspectRatios[val];
+                ratioSlider.value = ratio;
+                ratioValue.textContent = ratio;
+            } else {
+                ratioSlider.disabled = false;
+            }
+            debouncedDraw();
+        });
+
+        corruptionSlider.addEventListener('input', (e) => {
+            corruptionValue.textContent = e.target.value;
+            debouncedDraw();
+        });
+
+        visType.addEventListener('change', () => {
+            debouncedDraw();
+        });
+
         // Binary Toggle Event Observers
         btnReactPump.addEventListener('click', () => {
             reactPumpActive = !reactPumpActive;
@@ -1071,8 +1223,8 @@
 
         function draw() {
             const source = isVideo ? video : img;
-            const sWidth = isVideo ? video.videoWidth : img.width;
-            const sHeight = isVideo ? video.videoHeight : img.height;
+            const sWidth = isVideo ? (isWebcam ? video.videoWidth : video.videoWidth) : img.width;
+            const sHeight = isVideo ? (isWebcam ? video.videoHeight : video.videoHeight) : img.height;
 
             if (!sWidth || !sHeight) return; 
 
@@ -1085,13 +1237,18 @@
             const mode = charMode.value;
             const invert = invertCheck.checked;
             const dither = ditherCheck.checked;
+            const corruption = parseInt(corruptionSlider.value);
             
             let asciiStr = "";
             let ansiStr = "";
+            let htmlBody = "";
 
             ctx.filter = `contrast(${contrast}%)`;
 
             visualizerOutput.style.display = 'none';
+
+            let openSpan = false;
+            let lastR = -1, lastG = -1, lastB = -1;
 
             if (mode === 'braille') {
                 const outHeightChars = Math.floor((sHeight / sWidth) * outWidthChars * fontAspectRatio);
@@ -1111,8 +1268,20 @@
                 }
 
                 for (let y = 0; y < outHeightChars; y++) {
+                    // Analog Data Corruption: Frame Line Tearing
+                    let tearPadding = 0;
+                    if (corruption > 0 && Math.random() < (corruption / 350)) {
+                        tearPadding = Math.floor(Math.random() * (outWidthChars * 0.12));
+                    }
+
                     for (let x = 0; x < outWidthChars; x++) {
-                        const px = x * 2;
+                        // Apply offset skew if row is torn
+                        let targetX = x;
+                        if (tearPadding > 0) {
+                            targetX = (x + tearPadding) % outWidthChars;
+                        }
+
+                        const px = targetX * 2;
                         const py = y * 4;
                         let brailleChar = 0;
 
@@ -1125,7 +1294,7 @@
                             const cy = py + dy;
                             const idx = cy * pixelWidth + cx;
                             
-                            let oldBrightness = grayBuffer[idx];
+                            let oldBrightness = grayBuffer[idx] !== undefined ? grayBuffer[idx] : 0;
                             let isSolid = invert ? (oldBrightness <= threshold) : (oldBrightness > threshold);
                             
                             if (dither) {
@@ -1140,7 +1309,15 @@
 
                             if (isSolid) brailleChar += val;
                         }
-                        const brailleGlyph = String.fromCharCode(0x2800 + brailleChar);
+
+                        let brailleGlyph = String.fromCharCode(0x2800 + brailleChar);
+
+                        // Analog Data Corruption: Random character replacements
+                        if (corruption > 0 && Math.random() < (corruption / 250)) {
+                            const corruptPalette = ["X", "#", "?", "!", "@", "0", "1", "æ", "ø", "§", "Δ", "█", "%", "&"];
+                            brailleGlyph = corruptPalette[Math.floor(Math.random() * corruptPalette.length)];
+                        }
+
                         asciiStr += brailleGlyph;
 
                         const baseIdx = (py * pixelWidth + px) * 4;
@@ -1148,9 +1325,25 @@
                         const g = pixels[baseIdx+1] !== undefined ? pixels[baseIdx+1] : 0;
                         const b = pixels[baseIdx+2] !== undefined ? pixels[baseIdx+2] : 0;
                         ansiStr += `\x1b[38;2;${r};${g};${b}m${brailleGlyph}`;
+
+                        // Optimizing HTML span compiling: Group continuous identical colors
+                        if (r !== lastR || g !== lastG || b !== lastB) {
+                            if (openSpan) htmlBody += "</span>";
+                            htmlBody += `<span style="color:rgb(${r},${g},${b})">`;
+                            openSpan = true;
+                            lastR = r; lastG = g; lastB = b;
+                        }
+                        htmlBody += brailleGlyph;
                     }
                     asciiStr += "\n";
                     ansiStr += "\x1b[0m\n";
+                    
+                    if (openSpan) {
+                        htmlBody += "</span>";
+                        openSpan = false;
+                    }
+                    htmlBody += "\n";
+                    lastR = -1; lastG = -1; lastB = -1;
                 }
             } else {
                 const pixelHeight = Math.floor((sHeight / sWidth) * outWidthChars * fontAspectRatio);
@@ -1172,9 +1365,20 @@
                 let step = 255 / Math.max(1, (ramp.length - 1));
 
                 for (let y = 0; y < pixelHeight; y++) {
+                    // Analog Data Corruption: Row Tearing
+                    let tearPadding = 0;
+                    if (corruption > 0 && Math.random() < (corruption / 350)) {
+                        tearPadding = Math.floor(Math.random() * (outWidthChars * 0.12));
+                    }
+
                     for (let x = 0; x < outWidthChars; x++) {
-                        const idx = y * outWidthChars + x;
-                        let oldBrightness = grayBuffer[idx];
+                        let targetX = x;
+                        if (tearPadding > 0) {
+                            targetX = (x + tearPadding) % outWidthChars;
+                        }
+
+                        const idx = y * outWidthChars + targetX;
+                        let oldBrightness = grayBuffer[idx] !== undefined ? grayBuffer[idx] : 0;
                         
                         let charIndex = Math.round(oldBrightness / step);
                         if (charIndex < 0) charIndex = 0;
@@ -1190,7 +1394,14 @@
                             if(x+1 < outWidthChars && y+1 < pixelHeight) grayBuffer[idx+outWidthChars+1] += err * 1/16;
                         }
 
-                        const glyph = ramp[charIndex];
+                        let glyph = ramp[charIndex];
+
+                        // Analog Data Corruption: Random character replacements
+                        if (corruption > 0 && Math.random() < (corruption / 250)) {
+                            const corruptPalette = ["X", "#", "?", "!", "@", "0", "1", "æ", "ø", "§", "Δ", "█", "%", "&"];
+                            glyph = corruptPalette[Math.floor(Math.random() * corruptPalette.length)];
+                        }
+
                         asciiStr += glyph;
 
                         const baseIdx = idx * 4;
@@ -1198,38 +1409,101 @@
                         const g = pixels[baseIdx+1] !== undefined ? pixels[baseIdx+1] : 0;
                         const b = pixels[baseIdx+2] !== undefined ? pixels[baseIdx+2] : 0;
                         ansiStr += `\x1b[38;2;${r};${g};${b}m${glyph}`;
+
+                        // Optimizing HTML span compiling: Group continuous identical colors
+                        if (r !== lastR || g !== lastG || b !== lastB) {
+                            if (openSpan) htmlBody += "</span>";
+                            htmlBody += `<span style="color:rgb(${r},${g},${b})">`;
+                            openSpan = true;
+                            lastR = r; lastG = g; lastB = b;
+                        }
+                        htmlBody += glyph;
                     }
                     asciiStr += "\n";
                     ansiStr += "\x1b[0m\n";
+
+                    if (openSpan) {
+                        htmlBody += "</span>";
+                        openSpan = false;
+                    }
+                    htmlBody += "\n";
+                    lastR = -1; lastG = -1; lastB = -1;
                 }
             }
             
             output.textContent = asciiStr;
             currentAnsiStr = ansiStr;
 
+            // Compile clean colored HTML document structure
+            const isLight = document.body.classList.contains('light-theme');
+            const bgHex = isLight ? '#ffffff' : '#000000';
+            const fgHex = isLight ? '#000000' : '#d1d1d1';
+            currentHtmlStr = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body { background: ${bgHex}; color: ${fgHex}; margin: 0; padding: 20px; font-family: 'Courier New', Courier, monospace; font-size: ${fontSizeSlider.value}px; line-height: ${fontSizeSlider.value}px; letter-spacing: 0; }
+pre { margin: 0; white-space: pre; }
+</style>
+</head>
+<body>
+<pre>${htmlBody}</pre>
+</body>
+</html>`;
+
+            // Separate Volume display renderer
             if (isVideo && audioCheck.checked && analyserNode && !video.paused) {
-                analyserNode.getByteTimeDomainData(audioDataArray);
-                
                 let line1 = "";
                 let line2 = "";
                 let line3 = "";
                 const len = audioDataArray.length;
-                for (let x = 0; x < outWidthChars; x++) {
-                    const dataIdx = Math.floor((x / outWidthChars) * len);
-                    const val = audioDataArray[dataIdx];
-                    
-                    if (val > 148) {
-                        line1 += "█";
-                        line2 += " ";
-                        line3 += " ";
-                    } else if (val < 108) {
-                        line1 += " ";
-                        line2 += " ";
-                        line3 += "█";
-                    } else {
-                        line1 += " ";
-                        line2 += "█";
-                        line3 += " ";
+
+                if (visType.value === 'eq') {
+                    // Spectral graphic equalizer FFT calculations
+                    analyserNode.getByteFrequencyData(audioDataArray);
+                    for (let x = 0; x < outWidthChars; x++) {
+                        const dataIdx = Math.floor((x / outWidthChars) * len);
+                        const val = audioDataArray[dataIdx]; 
+                        
+                        if (val > 165) {
+                            line1 += "█";
+                            line2 += "█";
+                            line3 += "█";
+                        } else if (val > 80) {
+                            line1 += " ";
+                            line2 += "█";
+                            line3 += "█";
+                        } else if (val > 15) {
+                            line1 += " ";
+                            line2 += " ";
+                            line3 += "█";
+                        } else {
+                            line1 += " ";
+                            line2 += " ";
+                            line3 += " ";
+                        }
+                    }
+                } else {
+                    // Standard time-domain Oscilloscope calculations
+                    analyserNode.getByteTimeDomainData(audioDataArray);
+                    for (let x = 0; x < outWidthChars; x++) {
+                        const dataIdx = Math.floor((x / outWidthChars) * len);
+                        const val = audioDataArray[dataIdx]; 
+                        
+                        if (val > 148) {
+                            line1 += "█";
+                            line2 += " ";
+                            line3 += " ";
+                        } else if (val < 108) {
+                            line1 += " ";
+                            line2 += " ";
+                            line3 += "█";
+                        } else {
+                            line1 += " ";
+                            line2 += "█";
+                            line3 += " ";
+                        }
                     }
                 }
                 const visSeparator = "=".repeat(outWidthChars);
@@ -1498,6 +1772,22 @@
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
+        });
+
+        downloadHtmlBtn.addEventListener('click', () => {
+            if(!output.textContent || output.textContent.includes("WAITING FOR INPUT")) {
+                alert("Render a fucking image first.");
+                return;
+            }
+            const blob = new Blob([currentHtmlStr], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = isVideo ? `ascii_frame_${video.currentTime.toFixed(2)}s.html` : 'ascii_export.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         });
 
         // Initialize systems
