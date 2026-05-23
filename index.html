@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>STRICT INDUSTRIAL ASCII v8.0</title>
+    <title>STRICT INDUSTRIAL ASCII v9.0</title>
     <style>
         :root {
             --bg-color: #050505;
@@ -91,6 +91,15 @@
         }
 
         #videoControls {
+            background: rgba(158, 26, 26, 0.05);
+            border: 1px dashed var(--accent-color);
+            padding: 10px;
+            display: none;
+            width: 95%;
+            margin: 0 auto 15px auto;
+        }
+
+        #frameExportControls {
             background: rgba(158, 26, 26, 0.05);
             border: 1px dashed var(--accent-color);
             padding: 10px;
@@ -200,6 +209,20 @@
             <span class="value-display" id="timeDisplay" style="width: 100px; text-align: right;">0.0s / 0.0s</span>
         </div>
 
+        <div class="control-group" id="frameExportControls">
+            <label>Export Format:
+                <select id="exportFormat">
+                    <option value="txt">TEXT (.TXT)</option>
+                    <option value="png">IMAGE (.PNG)</option>
+                </select>
+            </label>
+            <div class="slider-wrapper">
+                <label>Export FPS:</label>
+                <input type="number" id="exportFps" value="10" min="1" max="60">
+            </div>
+            <button id="exportFramesBtn" style="border-color: #ff9900; color: #ff9900;">[ EXPORT SEQUENTIAL FRAMES ]</button>
+        </div>
+
         <div class="control-group">
             <div class="slider-wrapper">
                 <label>Width:</label>
@@ -274,6 +297,11 @@
         const downloadPngBtn = document.getElementById('downloadPngBtn');
         const recordVideoBtn = document.getElementById('recordVideoBtn');
         
+        const frameExportControls = document.getElementById('frameExportControls');
+        const exportFormat = document.getElementById('exportFormat');
+        const exportFps = document.getElementById('exportFps');
+        const exportFramesBtn = document.getElementById('exportFramesBtn');
+        
         const charLimitInput = document.getElementById('charLimitInput');
         const charCountDisplay = document.getElementById('charCountDisplay');
         
@@ -320,6 +348,12 @@
         let recordedChunks = [];
         let isRecording = false;
 
+        // Sequential Frame Export Variables
+        let isExportingFrames = false;
+        let exportCurrentTime = 0;
+        let exportFrameCount = 0;
+        let dirHandle = null;
+
         document.body.addEventListener('dragover', (e) => {
             e.preventDefault();
             document.body.classList.add('drag-over');
@@ -348,6 +382,7 @@
             if (file.type.startsWith('video/')) {
                 isVideo = true;
                 videoControls.style.display = 'flex';
+                frameExportControls.style.display = 'flex';
                 recordVideoBtn.style.display = 'inline-block';
                 output.textContent = "LOADING VIDEO...";
                 video.src = currentMediaUrl;
@@ -362,6 +397,7 @@
             } else if (file.type.startsWith('image/')) {
                 isVideo = false;
                 videoControls.style.display = 'none';
+                frameExportControls.style.display = 'none';
                 recordVideoBtn.style.display = 'none';
                 output.textContent = "LOADING IMAGE...";
                 img.src = currentMediaUrl;
@@ -379,8 +415,77 @@
             draw();
         });
 
-        video.addEventListener('seeked', () => {
-            if (video.paused && !isRecording) draw(); 
+        video.addEventListener('seeked', async () => {
+            if (video.paused && !isRecording && !isExportingFrames) {
+                draw(); 
+            }
+
+            if (isExportingFrames) {
+                draw();
+
+                const format = exportFormat.value;
+                const padFrame = String(exportFrameCount).padStart(5, '0');
+                const filename = `frame_${padFrame}`;
+
+                if (dirHandle) {
+                    try {
+                        if (format === 'txt') {
+                            const fileHandle = await dirHandle.getFileHandle(`${filename}.txt`, { create: true });
+                            const writable = await fileHandle.createWritable();
+                            await writable.write(output.textContent);
+                            await writable.close();
+                        } else {
+                            const pngBlob = await getPngBlob();
+                            const fileHandle = await dirHandle.getFileHandle(`${filename}.png`, { create: true });
+                            const writable = await fileHandle.createWritable();
+                            await writable.write(pngBlob);
+                            await writable.close();
+                        }
+                    } catch (e) {
+                        console.error("Failed to write frame to directory", e);
+                        isExportingFrames = false;
+                        exportFramesBtn.textContent = "[ EXPORT SEQUENTIAL FRAMES ]";
+                        exportFramesBtn.style.backgroundColor = "transparent";
+                        alert("Writing failed. Export aborted.");
+                        return;
+                    }
+                } else {
+                    if (format === 'txt') {
+                        const blob = new Blob([output.textContent], { type: 'text/plain' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${filename}.txt`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                    } else {
+                        const canvas = renderPreToCanvas();
+                        const url = canvas.toDataURL('image/png');
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${filename}.png`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    }
+                }
+
+                exportFrameCount++;
+                const fps = parseFloat(exportFps.value);
+                exportCurrentTime += (1 / fps);
+
+                if (exportCurrentTime < video.duration && isExportingFrames) {
+                    video.currentTime = exportCurrentTime;
+                } else {
+                    isExportingFrames = false;
+                    exportFramesBtn.textContent = "[ EXPORT SEQUENTIAL FRAMES ]";
+                    exportFramesBtn.style.backgroundColor = "transparent";
+                    exportFramesBtn.style.color = "#ff9900";
+                    alert(`Fucking done. Successfully exported ${exportFrameCount} frames.`);
+                }
+            }
         });
 
         video.addEventListener('timeupdate', () => {
@@ -412,13 +517,19 @@
             if (isRecording) {
                 mediaRecorder.stop();
             }
+            if (isExportingFrames) {
+                isExportingFrames = false;
+                exportFramesBtn.textContent = "[ EXPORT SEQUENTIAL FRAMES ]";
+                exportFramesBtn.style.backgroundColor = "transparent";
+                exportFramesBtn.style.color = "#ff9900";
+            }
             
             updateTimeDisplay();
             debouncedDraw();
         });
 
         videoSlider.addEventListener('input', (e) => {
-            if (isRecording) return; 
+            if (isRecording || isExportingFrames) return; 
             video.currentTime = e.target.value;
             updateTimeDisplay();
             if (video.paused) debouncedDraw();
@@ -666,6 +777,92 @@
             }
         }
 
+        function renderPreToCanvas() {
+            const lines = output.textContent.split('\n');
+            if(lines[lines.length-1] === '') lines.pop(); 
+
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            const fontSize = 10;
+            const lineHeight = 10;
+            ctx.font = `${fontSize}px 'Courier New', Courier, monospace`;
+            
+            let maxWidth = 0;
+            for(let line of lines) {
+                let metrics = ctx.measureText(line);
+                if(metrics.width > maxWidth) maxWidth = metrics.width;
+            }
+            
+            canvas.width = maxWidth + 30; 
+            canvas.height = (lines.length * lineHeight) + 30;
+            
+            const isLight = document.body.classList.contains('light-theme');
+            ctx.fillStyle = isLight ? '#ffffff' : '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = isLight ? '#000000' : '#d1d1d1';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.font = `${fontSize}px 'Courier New', Courier, monospace`;
+            
+            for(let i=0; i<lines.length; i++) {
+                ctx.fillText(lines[i], 15, 15 + (i * lineHeight));
+            }
+            return canvas;
+        }
+
+        function getPngBlob() {
+            return new Promise((resolve) => {
+                const canvas = renderPreToCanvas();
+                canvas.toBlob((blob) => {
+                    resolve(blob);
+                }, 'image/png');
+            });
+        }
+
+        exportFramesBtn.addEventListener('click', async () => {
+            if (!isVideo) return alert("Upload a fucking video first.");
+            if (isExportingFrames) {
+                isExportingFrames = false;
+                exportFramesBtn.textContent = "[ EXPORT SEQUENTIAL FRAMES ]";
+                exportFramesBtn.style.backgroundColor = "transparent";
+                exportFramesBtn.style.color = "#ff9900";
+                return;
+            }
+
+            const frameCountEst = Math.ceil(video.duration * parseInt(exportFps.value));
+            if (frameCountEst > 500) {
+                if (!confirm(`This will attempt to export roughly ${frameCountEst} files. It could spam your downloads folder or lock up your tab. Proceed?`)) return;
+            }
+
+            dirHandle = null;
+            if (window.showDirectoryPicker) {
+                const usePicker = confirm("Your browser supports saving files directly to a local folder without spamming your downloads folder. Would you like to select a folder for this export?");
+                if (usePicker) {
+                    try {
+                        dirHandle = await window.showDirectoryPicker();
+                    } catch (e) {
+                        alert("Folder selection cancelled. Falling back to traditional browser downloads. Be prepared for multiple download prompts!");
+                    }
+                }
+            } else {
+                alert("Your browser does not support direct folder saving (Firefox/Safari/mobile). Sequential downloads will trigger standard browser prompts.");
+            }
+
+            isExportingFrames = true;
+            exportFramesBtn.textContent = "[ STOP EXPORT ]";
+            exportFramesBtn.style.color = "#ffffff";
+            exportFramesBtn.style.backgroundColor = "#ff9900";
+            exportCurrentTime = 0;
+            exportFrameCount = 0;
+            
+            video.pause();
+            playPauseBtn.textContent = "[ PLAY ]";
+            
+            video.currentTime = 0;
+        });
+
         recordVideoBtn.addEventListener('click', () => {
             if(!isVideo) return alert("Upload a fucking video first.");
             
@@ -782,39 +979,7 @@
                 alert("Render a fucking image first.");
                 return;
             }
-
-            const lines = output.textContent.split('\n');
-            if(lines[lines.length-1] === '') lines.pop(); 
-
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            
-            const fontSize = 10;
-            const lineHeight = 10;
-            ctx.font = `${fontSize}px 'Courier New', Courier, monospace`;
-            
-            let maxWidth = 0;
-            for(let line of lines) {
-                let metrics = ctx.measureText(line);
-                if(metrics.width > maxWidth) maxWidth = metrics.width;
-            }
-            
-            canvas.width = maxWidth + 30; 
-            canvas.height = (lines.length * lineHeight) + 30;
-            
-            const isLight = document.body.classList.contains('light-theme');
-            ctx.fillStyle = isLight ? '#ffffff' : '#000000';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            ctx.fillStyle = isLight ? '#000000' : '#d1d1d1';
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'top';
-            ctx.font = `${fontSize}px 'Courier New', Courier, monospace`;
-            
-            for(let i=0; i<lines.length; i++) {
-                ctx.fillText(lines[i], 15, 15 + (i * lineHeight));
-            }
-            
+            const canvas = renderPreToCanvas();
             const url = canvas.toDataURL('image/png');
             const a = document.createElement('a');
             a.href = url;
