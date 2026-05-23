@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>STRICT INDUSTRIAL ASCII v9.0</title>
+    <title>STRICT INDUSTRIAL ASCII v10.0</title>
     <style>
         :root {
             --bg-color: #050505;
@@ -12,6 +12,7 @@
             --accent-color: #9e1a1a;
             --border-color: #3a0000;
             --pre-color: #d1d1d1;
+            --font-size: 10px;
         }
 
         body.light-theme {
@@ -32,7 +33,7 @@
             text-transform: uppercase;
             border: 8px solid var(--border-color);
             min-height: 90vh;
-            transition: all 0.3s ease;
+            transition: background 0.3s ease, border 0.3s ease, color 0.3s ease;
         }
 
         body.drag-over {
@@ -56,12 +57,32 @@
             max-width: 95vw;
             overflow: auto;
             position: relative;
+            transition: transform 0.05s ease-out, filter 0.05s ease-out;
+        }
+
+        #output-container.scanlines::after {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.4) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.04), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.04));
+            background-size: 100% 4px, 6px 100%;
+            z-index: 10;
+            pointer-events: none;
+            opacity: 0.8;
+            animation: flicker 0.15s infinite;
+        }
+
+        @keyframes flicker {
+            0% { opacity: 0.75; }
+            50% { opacity: 0.85; }
+            100% { opacity: 0.75; }
         }
 
         pre { 
             font-family: 'Courier New', Courier, monospace; 
-            font-size: 10px; 
-            line-height: 10px;
+            font-size: var(--font-size); 
+            line-height: var(--font-size);
             letter-spacing: 0;
             white-space: pre;
             margin: 0;
@@ -69,6 +90,14 @@
             color: var(--pre-color);
             display: block;
             text-align: left;
+        }
+
+        #visualizerOutput {
+            border-top: 2px dashed var(--border-color);
+            color: var(--accent-color);
+            display: none;
+            padding-top: 15px;
+            padding-bottom: 15px;
         }
 
         .controls { 
@@ -123,6 +152,23 @@
             background: var(--accent-color); 
             color: #fff; 
             cursor: pointer; 
+        }
+
+        .toggle-btn {
+            border: 1px solid var(--border-color);
+            background: var(--container-bg);
+            color: var(--accent-color);
+            font-weight: bold;
+            text-transform: uppercase;
+            padding: 8px 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .toggle-btn.active {
+            background: var(--accent-color);
+            color: #fff;
+            border-color: var(--accent-color);
         }
 
         input[type="number"] { width: 80px; }
@@ -200,13 +246,42 @@
             <label><input type="checkbox" id="audioCheck"> 4-BIT AUDIO</label>
         </div>
 
+        <div class="control-group" style="border-top: 1px dashed var(--border-color); padding-top: 15px;">
+            <select id="terminalPreset">
+                <option value="default">Style: Default Gray</option>
+                <option value="green">Style: VT100 Green</option>
+                <option value="amber">Style: VT220 Amber</option>
+                <option value="alert">Style: Red Alert</option>
+            </select>
+
+            <label><input type="checkbox" id="scanlineCheck"> CRT Scanlines</label>
+            <label><input type="checkbox" id="reactiveCheck"> Audio Reactive</label>
+
+            <div id="reactiveControls" style="display: none; gap: 10px;">
+                <button id="btnReactPump" class="toggle-btn">[ PUMP: OFF ]</button>
+                <button id="btnReactFlash" class="toggle-btn">[ FLASH: OFF ]</button>
+                <button id="btnReactGlitch" class="toggle-btn">[ GLITCH: OFF ]</button>
+            </div>
+        </div>
+
         <div class="control-group" id="videoControls">
             <button id="playPauseBtn" style="width: 100px;">[ PLAY ]</button>
             <button id="stopBtn" style="width: 100px;">[ STOP ]</button>
+            <button id="prevFrameBtn" style="width: 50px;" title="Step 1 Frame Back (Keyboard: , or <)">[ &lt; ]</button>
+            <button id="nextFrameBtn" style="width: 50px;" title="Step 1 Frame Forward (Keyboard: . or >)">[ &gt; ]</button>
             <div class="slider-wrapper" style="flex-grow: 1;">
                 <input type="range" id="videoSlider" min="0" max="100" step="0.05" value="0" style="width: 100%;">
             </div>
             <span class="value-display" id="timeDisplay" style="width: 100px; text-align: right;">0.0s / 0.0s</span>
+            
+            <div class="slider-wrapper">
+                <label>Trim In (s):</label>
+                <input type="number" id="startTimeInput" value="0" min="0" step="0.1" style="width: 70px;">
+            </div>
+            <div class="slider-wrapper">
+                <label>Trim Out (s):</label>
+                <input type="number" id="endTimeInput" value="0" min="0" step="0.1" style="width: 70px;" title="Set to 0 to play to end">
+            </div>
         </div>
 
         <div class="control-group" id="frameExportControls">
@@ -247,6 +322,12 @@
                 <input type="range" id="thresholdSlider" min="1" max="254" value="128">
                 <span class="value-display" id="thresholdValue">128</span>
             </div>
+
+            <div class="slider-wrapper">
+                <label>Font Size:</label>
+                <input type="range" id="fontSizeSlider" min="5" max="24" value="10">
+                <span class="value-display" id="fontSizeValue">10</span>
+            </div>
         </div>
 
         <div class="control-group" style="margin-bottom: 0;">
@@ -260,9 +341,11 @@
             
             <button id="copyBackticksBtn">[ COPY ``` ]</button>
             <button id="copyTildesBtn">[ COPY ~~~ ]</button>
+            <button id="copyAnsiBtn" style="border-color: #00ff00; color: #00ff00;">[ COPY ANSI ]</button>
             <button id="downloadBtn">[ DL .TXT ]</button>
             <button id="downloadPngBtn">[ DL .PNG ]</button>
             <button id="recordVideoBtn" style="display: none; border-color: #ff0000; color: #ff0000;">[ RECORD .WEBM ]</button>
+            <button id="helpBtn" style="border-color: #00ffff; color: #00ffff;">[ HELP / KEYBINDS ]</button>
         </div>
     </div>
 
@@ -270,11 +353,47 @@
 
     <div id="output-container">
         <pre id="output">WAITING FOR INPUT... (DRAG AND DROP IMAGE OR VIDEO HERE)</pre>
+        <pre id="visualizerOutput"></pre>
+    </div>
+
+    <!-- Terminal Manual Modal -->
+    <div id="helpModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 100; align-items: center; justify-content: center;">
+        <div style="background: var(--container-bg); border: 4px solid var(--border-color); max-width: 650px; width: 90%; max-height: 80vh; overflow-y: auto; padding: 25px; text-align: left; font-family: 'Courier New', Courier, monospace; color: var(--text-color);">
+            <h3 style="color: var(--accent-color); margin-top: 0; border-bottom: 2px solid var(--border-color); padding-bottom: 5px;">TERMINAL MANUAL & KEYBINDS</h3>
+            
+            <p style="font-weight: bold; color: var(--accent-color); margin-bottom: 5px;">[ INPUT & FILE HANDLING ]</p>
+            <p style="margin: 0 0 15px 0;">- Drag and drop images or videos anywhere on screen to load them.</p>
+            <p style="margin: 0 0 15px 0;">- Or use the file uploader at the top left of the workspace.</p>
+
+            <p style="font-weight: bold; color: var(--accent-color); margin-bottom: 5px;">[ KEYBOARD HOTKEYS ]</p>
+            <p style="margin: 0 0 5px 0;">- <span style="color: var(--accent-color); font-weight: bold;">SPACEBAR</span> : Play / Pause video playback.</p>
+            <p style="margin: 0 0 5px 0;">- <span style="color: var(--accent-color); font-weight: bold;">,</span> or <span style="color: var(--accent-color); font-weight: bold;">&lt;</span> : Step 1 frame backward (fine timeline scrubbing).</p>
+            <p style="margin: 0 0 5px 0;">- <span style="color: var(--accent-color); font-weight: bold;">.</span> or <span style="color: var(--accent-color); font-weight: bold;">&gt;</span> : Step 1 frame forward (fine timeline scrubbing).</p>
+            <p style="font-size: 11px; opacity: 0.7; margin: 0 0 15px 0;">(Keys are automatically disabled when you are actively typing inside input fields.)</p>
+
+            <p style="font-weight: bold; color: var(--accent-color); margin-bottom: 5px;">[ FORMATS & EXPORTING ]</p>
+            <p style="margin: 0 0 5px 0;">- <span style="font-weight: bold;">COPY ``` / ~~~</span> : Copies markdown block formats. Tildes prevent backtick collision.</p>
+            <p style="margin: 0 0 5px 0;">- <span style="font-weight: bold;">COPY ANSI</span> : Copies 24-bit terminal RGB escape sequences to clipboard.</p>
+            <p style="margin: 0 0 5px 0;">- <span style="font-weight: bold;">EXPORT SEQUENTIAL FRAMES</span> : Step-renders video directly. Select local directory folder for seamless writes (Chrome/Edge only) or run sequential downloads.</p>
+            <p style="margin: 0 0 15px 0;">- <span style="font-weight: bold;">RECORD .WEBM</span> : Captures frames real-time and mixes the crushed 4-bit audio directly into a synchronized WebM video file.</p>
+
+            <p style="font-weight: bold; color: var(--accent-color); margin-bottom: 5px;">[ TIMELINE TIMING TRIM ]</p>
+            <p style="margin: 0 0 15px 0;">- Restrict standard loop playback, sequential frame exports, and WebM video recordings using the Trim In and Trim Out numeric range markers.</p>
+
+            <p style="font-weight: bold; color: var(--accent-color); margin-bottom: 5px;">[ MODULAR AUDIO REACTIVITY ]</p>
+            <p style="margin: 0 0 15px 0;">- Enable Audio Reactive controls to let volume RMS scale, glitch skew, or flash text brightness cumulatively with the audio output.</p>
+
+            <div style="text-align: center; margin-top: 20px;">
+                <button id="closeHelpBtn" style="border-color: var(--accent-color); color: var(--accent-color); width: 150px; cursor: pointer;">[ CLOSE ]</button>
+            </div>
+        </div>
     </div>
 
     <script>
         const upload = document.getElementById('upload');
         const output = document.getElementById('output');
+        const outputContainer = document.getElementById('output-container');
+        const visualizerOutput = document.getElementById('visualizerOutput');
         const widthSlider = document.getElementById('widthSlider');
         const widthValue = document.getElementById('widthValue');
         const ratioSlider = document.getElementById('ratioSlider');
@@ -290,12 +409,27 @@
         const themeCheck = document.getElementById('themeCheck');
         const ditherCheck = document.getElementById('ditherCheck');
         const audioCheck = document.getElementById('audioCheck');
+        const fontSizeSlider = document.getElementById('fontSizeSlider');
+        const fontSizeValue = document.getElementById('fontSizeValue');
         
+        const terminalPreset = document.getElementById('terminalPreset');
+        const scanlineCheck = document.getElementById('scanlineCheck');
+        const reactiveCheck = document.getElementById('reactiveCheck');
+        const reactiveControls = document.getElementById('reactiveControls');
+
+        const btnReactPump = document.getElementById('btnReactPump');
+        const btnReactFlash = document.getElementById('btnReactFlash');
+        const btnReactGlitch = document.getElementById('btnReactGlitch');
+
         const copyBackticksBtn = document.getElementById('copyBackticksBtn');
         const copyTildesBtn = document.getElementById('copyTildesBtn');
+        const copyAnsiBtn = document.getElementById('copyAnsiBtn');
         const downloadBtn = document.getElementById('downloadBtn');
         const downloadPngBtn = document.getElementById('downloadPngBtn');
         const recordVideoBtn = document.getElementById('recordVideoBtn');
+        const helpBtn = document.getElementById('helpBtn');
+        const helpModal = document.getElementById('helpModal');
+        const closeHelpBtn = document.getElementById('closeHelpBtn');
         
         const frameExportControls = document.getElementById('frameExportControls');
         const exportFormat = document.getElementById('exportFormat');
@@ -308,8 +442,12 @@
         const videoControls = document.getElementById('videoControls');
         const playPauseBtn = document.getElementById('playPauseBtn');
         const stopBtn = document.getElementById('stopBtn');
+        const prevFrameBtn = document.getElementById('prevFrameBtn');
+        const nextFrameBtn = document.getElementById('nextFrameBtn');
         const videoSlider = document.getElementById('videoSlider');
         const timeDisplay = document.getElementById('timeDisplay');
+        const startTimeInput = document.getElementById('startTimeInput');
+        const endTimeInput = document.getElementById('endTimeInput');
 
         const ramps = {
             standard: " .:-=+*#%@",
@@ -324,6 +462,13 @@
             [0, 3, 0x40], [1, 3, 0x80]
         ];
 
+        const stylePresets = {
+            default: { bg: '#050505', cbg: '#000', text: '#8c8c8c', accent: '#9e1a1a', border: '#3a0000', pre: '#d1d1d1' },
+            green: { bg: '#020d02', cbg: '#000500', text: '#33ff33', accent: '#00ff00', border: '#003300', pre: '#33ff33' },
+            amber: { bg: '#0d0702', cbg: '#050200', text: '#ffb000', accent: '#ffb000', border: '#4d1a00', pre: '#ffb000' },
+            alert: { bg: '#1a0000', cbg: '#050000', text: '#ff3333', accent: '#ff0000', border: '#800000', pre: '#ff3333' }
+        };
+
         let img = new Image();
         let video = document.createElement('video');
         video.crossOrigin = "anonymous";
@@ -335,11 +480,13 @@
         let drawTimeout;
         let lastDrawTime = 0;
 
-        // Audio Variables
+        // Audio & Visualizer Variables
         let audioCtx = null;
         let sourceNode = null;
         let waveShaper = null;
         let destNode = null;
+        let analyserNode = null;
+        let audioDataArray = null;
 
         // Video Recording Variables
         let recordCanvas = document.createElement('canvas');
@@ -353,6 +500,160 @@
         let exportCurrentTime = 0;
         let exportFrameCount = 0;
         let dirHandle = null;
+
+        // ANSI Output Cache
+        let currentAnsiStr = "";
+
+        // Modular Audio Reactive State Flags
+        let reactPumpActive = false;
+        let reactFlashActive = false;
+        let reactGlitchActive = false;
+
+        // Settings Local Storage Persistence Logic
+        function saveSettings() {
+            const settings = {
+                width: widthSlider.value,
+                ratio: ratioSlider.value,
+                contrast: contrastSlider.value,
+                threshold: thresholdSlider.value,
+                charMode: charMode.value,
+                customInput: customInput.value,
+                invert: invertCheck.checked,
+                theme: themeCheck.checked,
+                dither: ditherCheck.checked,
+                audio: audioCheck.checked,
+                limit: charLimitInput.value,
+                exportFormat: exportFormat.value,
+                exportFps: exportFps.value,
+                startTime: startTimeInput.value,
+                endTime: endTimeInput.value,
+                terminalPreset: terminalPreset.value,
+                scanlines: scanlineCheck.checked,
+                reactive: reactiveCheck.checked,
+                reactPumpActive,
+                reactFlashActive,
+                reactGlitchActive,
+                fontSize: fontSizeSlider.value
+            };
+            localStorage.setItem('ascii_terminal_settings_v5', JSON.stringify(settings));
+        }
+
+        function applyPreset(presetName) {
+            const root = document.documentElement;
+            const p = stylePresets[presetName] || stylePresets.default;
+            root.style.setProperty('--bg-color', p.bg);
+            root.style.setProperty('--container-bg', p.cbg);
+            root.style.setProperty('--text-color', p.text);
+            root.style.setProperty('--accent-color', p.accent);
+            root.style.setProperty('--border-color', p.border);
+            root.style.setProperty('--pre-color', p.pre);
+        }
+
+        function loadSettings() {
+            const data = localStorage.getItem('ascii_terminal_settings_v5');
+            if (!data) return;
+            try {
+                const s = JSON.parse(data);
+                widthSlider.value = s.width || 100;
+                widthValue.textContent = s.width || 100;
+                ratioSlider.value = s.ratio || 0.45;
+                ratioValue.textContent = s.ratio || 0.45;
+                contrastSlider.value = s.contrast || 100;
+                contrastValue.textContent = s.contrast || 100;
+                thresholdSlider.value = s.threshold || 128;
+                thresholdValue.textContent = s.threshold || 128;
+                charMode.value = s.charMode || 'detailed';
+                customInput.value = s.customInput || ' .-=+*#%@';
+                invertCheck.checked = !!s.invert;
+                themeCheck.checked = !!s.theme;
+                ditherCheck.checked = !!s.dither;
+                audioCheck.checked = !!s.audio;
+                charLimitInput.value = s.limit !== undefined ? s.limit : 2000;
+                exportFormat.value = s.exportFormat || 'txt';
+                exportFps.value = s.exportFps || 10;
+                startTimeInput.value = s.startTime || 0;
+                endTimeInput.value = s.endTime || 0;
+                
+                terminalPreset.value = s.terminalPreset || 'default';
+                scanlineCheck.checked = !!s.scanlines;
+                reactiveCheck.checked = !!s.reactive;
+
+                reactPumpActive = !!s.reactPumpActive;
+                reactFlashActive = !!s.reactFlashActive;
+                reactGlitchActive = !!s.reactGlitchActive;
+
+                fontSizeSlider.value = s.fontSize || 10;
+                fontSizeValue.textContent = s.fontSize || 10;
+                document.documentElement.style.setProperty('--font-size', `${fontSizeSlider.value}px`);
+
+                // Sync button states
+                btnReactPump.classList.toggle('active', reactPumpActive);
+                btnReactPump.textContent = reactPumpActive ? "[ PUMP: ON ]" : "[ PUMP: OFF ]";
+
+                btnReactFlash.classList.toggle('active', reactFlashActive);
+                btnReactFlash.textContent = reactFlashActive ? "[ FLASH: ON ]" : "[ FLASH: OFF ]";
+
+                btnReactGlitch.classList.toggle('active', reactGlitchActive);
+                btnReactGlitch.textContent = reactGlitchActive ? "[ GLITCH: ON ]" : "[ GLITCH: OFF ]";
+
+                document.body.classList.toggle('light-theme', themeCheck.checked);
+                thresholdContainer.style.display = charMode.value === 'braille' ? 'flex' : 'none';
+                customInput.style.display = charMode.value === 'custom' ? 'inline-block' : 'none';
+                outputContainer.classList.toggle('scanlines', scanlineCheck.checked);
+                reactiveControls.style.display = reactiveCheck.checked ? 'flex' : 'none';
+                applyPreset(terminalPreset.value);
+            } catch(e) { console.error("Failed to load settings", e); }
+        }
+
+        function setupSettingsAutoSave() {
+            const inputs = [
+                widthSlider, ratioSlider, contrastSlider, thresholdSlider,
+                charMode, customInput, invertCheck, themeCheck, ditherCheck,
+                audioCheck, charLimitInput, exportFormat, exportFps,
+                startTimeInput, endTimeInput, terminalPreset, scanlineCheck,
+                reactiveCheck, fontSizeSlider
+            ];
+            inputs.forEach(input => {
+                input.addEventListener('change', saveSettings);
+                input.addEventListener('input', saveSettings);
+            });
+        }
+
+        // Global hotkey logic mapping comma/period keys to frame steps
+        document.addEventListener('keydown', (e) => {
+            // Close manual on Escape
+            if (e.key === 'Escape' && helpModal.style.display === 'flex') {
+                closeHelp();
+                return;
+            }
+
+            // Bypass global shortcuts if user is inside an input box or manual is open
+            if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT' || helpModal.style.display === 'flex') {
+                return;
+            }
+            
+            if (e.key === ',' || e.key === '<') {
+                e.preventDefault();
+                prevFrameBtn.click();
+            } else if (e.key === '.' || e.key === '>') {
+                e.preventDefault();
+                nextFrameBtn.click();
+            } else if (e.key === ' ') {
+                e.preventDefault();
+                playPauseBtn.click();
+            }
+        });
+
+        // Manual overlay visibility observers
+        helpBtn.addEventListener('click', () => {
+            helpModal.style.display = 'flex';
+        });
+
+        const closeHelp = () => {
+            helpModal.style.display = 'none';
+        };
+
+        closeHelpBtn.addEventListener('click', closeHelp);
 
         document.body.addEventListener('dragover', (e) => {
             e.preventDefault();
@@ -411,6 +712,10 @@
 
         video.addEventListener('loadedmetadata', () => {
             videoSlider.max = video.duration;
+            endTimeInput.max = video.duration;
+            if (parseFloat(endTimeInput.value) === 0 || isNaN(parseFloat(endTimeInput.value))) {
+                endTimeInput.value = video.duration.toFixed(1);
+            }
             updateTimeDisplay();
             draw();
         });
@@ -476,7 +781,8 @@
                 const fps = parseFloat(exportFps.value);
                 exportCurrentTime += (1 / fps);
 
-                if (exportCurrentTime < video.duration && isExportingFrames) {
+                const endVal = parseFloat(endTimeInput.value) || video.duration;
+                if (exportCurrentTime < endVal && isExportingFrames) {
                     video.currentTime = exportCurrentTime;
                 } else {
                     isExportingFrames = false;
@@ -500,6 +806,10 @@
                 if (audioCheck.checked && audioCtx && audioCtx.state === 'suspended') {
                     audioCtx.resume();
                 }
+                const startVal = parseFloat(startTimeInput.value) || 0;
+                if (video.currentTime < startVal) {
+                    video.currentTime = startVal;
+                }
                 video.play();
                 playPauseBtn.textContent = "[ PAUSE ]";
                 requestAnimationFrame(playLoop);
@@ -511,7 +821,8 @@
 
         stopBtn.addEventListener('click', () => {
             video.pause();
-            video.currentTime = 0;
+            const startVal = parseFloat(startTimeInput.value) || 0;
+            video.currentTime = startVal;
             playPauseBtn.textContent = "[ PLAY ]";
             
             if (isRecording) {
@@ -524,6 +835,30 @@
                 exportFramesBtn.style.color = "#ff9900";
             }
             
+            outputContainer.style.transform = "";
+            outputContainer.style.filter = "";
+
+            updateTimeDisplay();
+            debouncedDraw();
+        });
+
+        // Frame-by-Frame step observers
+        prevFrameBtn.addEventListener('click', () => {
+            if (!isVideo) return;
+            video.pause();
+            playPauseBtn.textContent = "[ PLAY ]";
+            const step = 1 / (parseFloat(exportFps.value) || 10);
+            video.currentTime = Math.max(0, video.currentTime - step);
+            updateTimeDisplay();
+            debouncedDraw();
+        });
+
+        nextFrameBtn.addEventListener('click', () => {
+            if (!isVideo) return;
+            video.pause();
+            playPauseBtn.textContent = "[ PLAY ]";
+            const step = 1 / (parseFloat(exportFps.value) || 10);
+            video.currentTime = Math.min(video.duration, video.currentTime + step);
             updateTimeDisplay();
             debouncedDraw();
         });
@@ -549,8 +884,29 @@
                         mediaRecorder.stop();
                     }
                 }
+                outputContainer.style.transform = "";
+                outputContainer.style.filter = "";
                 return;
             }
+
+            const startVal = parseFloat(startTimeInput.value) || 0;
+            const endVal = parseFloat(endTimeInput.value) || video.duration;
+            if (video.currentTime >= endVal) {
+                if (isRecording) {
+                    mediaRecorder.stop();
+                    return;
+                }
+                if (isExportingFrames) {
+                    isExportingFrames = false;
+                    exportFramesBtn.textContent = "[ EXPORT SEQUENTIAL FRAMES ]";
+                    exportFramesBtn.style.backgroundColor = "transparent";
+                    exportFramesBtn.style.color = "#ff9900";
+                    alert(`Fucking done. Successfully exported ${exportFrameCount} frames.`);
+                    return;
+                }
+                video.currentTime = startVal;
+            }
+
             let delay = isRecording ? 30 : 60; 
             if (timestamp - lastDrawTime >= delay) {
                 draw();
@@ -559,6 +915,44 @@
                 }
                 lastDrawTime = timestamp;
             }
+
+            // Cumulative audio-reactive system updates
+            if (isVideo && audioCheck.checked && reactiveCheck.checked && analyserNode) {
+                analyserNode.getByteTimeDomainData(audioDataArray);
+                let sum = 0;
+                for (let i = 0; i < audioDataArray.length; i++) {
+                    let val = (audioDataArray[i] - 128) / 128;
+                    sum += val * val;
+                }
+                let rms = Math.sqrt(sum / audioDataArray.length);
+
+                let transformStr = "";
+                let filterStr = "";
+
+                if (reactPumpActive) {
+                    const scale = 1 + rms * 0.15;
+                    transformStr += `scale(${scale}) `;
+                }
+                if (reactGlitchActive) {
+                    if (rms > 0.12) {
+                        const dx = (Math.random() - 0.5) * rms * 30;
+                        const dy = (Math.random() - 0.5) * rms * 30;
+                        transformStr += `translate(${dx}px, ${dy}px) skewX(${(Math.random() - 0.5) * 10}deg) `;
+                    }
+                }
+                if (reactFlashActive) {
+                    const brightness = 1 + rms * 1.5;
+                    const contrast = 100 + rms * 150;
+                    filterStr += `brightness(${brightness}) contrast(${contrast}%) `;
+                }
+
+                outputContainer.style.transform = transformStr;
+                outputContainer.style.filter = filterStr;
+            } else {
+                outputContainer.style.transform = "";
+                outputContainer.style.filter = "";
+            }
+
             requestAnimationFrame(playLoop);
         }
 
@@ -582,11 +976,16 @@
                 }
                 waveShaper.curve = curve;
                 
+                analyserNode = audioCtx.createAnalyser();
+                analyserNode.fftSize = 64; 
+                audioDataArray = new Uint8Array(analyserNode.frequencyBinCount);
+
                 destNode = audioCtx.createMediaStreamDestination();
 
                 sourceNode.connect(waveShaper);
-                waveShaper.connect(audioCtx.destination);
-                waveShaper.connect(destNode);
+                waveShaper.connect(analyserNode);
+                analyserNode.connect(audioCtx.destination);
+                analyserNode.connect(destNode);
             }
             if (audioCtx.state === 'suspended') {
                 audioCtx.resume();
@@ -600,6 +999,46 @@
             } else {
                 video.muted = true;
             }
+        });
+
+        terminalPreset.addEventListener('change', (e) => {
+            applyPreset(e.target.value);
+        });
+
+        scanlineCheck.addEventListener('change', (e) => {
+            outputContainer.classList.toggle('scanlines', e.target.checked);
+        });
+
+        reactiveCheck.addEventListener('change', (e) => {
+            reactiveControls.style.display = e.target.checked ? 'flex' : 'none';
+        });
+
+        fontSizeSlider.addEventListener('input', (e) => {
+            const val = e.target.value;
+            fontSizeValue.textContent = val;
+            document.documentElement.style.setProperty('--font-size', `${val}px`);
+        });
+
+        // Binary Toggle Event Observers
+        btnReactPump.addEventListener('click', () => {
+            reactPumpActive = !reactPumpActive;
+            btnReactPump.classList.toggle('active', reactPumpActive);
+            btnReactPump.textContent = reactPumpActive ? "[ PUMP: ON ]" : "[ PUMP: OFF ]";
+            saveSettings();
+        });
+
+        btnReactFlash.addEventListener('click', () => {
+            reactFlashActive = !reactFlashActive;
+            btnReactFlash.classList.toggle('active', reactFlashActive);
+            btnReactFlash.textContent = reactFlashActive ? "[ FLASH: ON ]" : "[ FLASH: OFF ]";
+            saveSettings();
+        });
+
+        btnReactGlitch.addEventListener('click', () => {
+            reactGlitchActive = !reactGlitchActive;
+            btnReactGlitch.classList.toggle('active', reactGlitchActive);
+            btnReactGlitch.textContent = reactGlitchActive ? "[ GLITCH: ON ]" : "[ GLITCH: OFF ]";
+            saveSettings();
         });
         
         widthSlider.addEventListener('input', () => { widthValue.textContent = widthSlider.value; debouncedDraw(); });
@@ -639,8 +1078,11 @@
             const dither = ditherCheck.checked;
             
             let asciiStr = "";
+            let ansiStr = "";
 
             ctx.filter = `contrast(${contrast}%)`;
+
+            visualizerOutput.style.display = 'none';
 
             if (mode === 'braille') {
                 const outHeightChars = Math.floor((sHeight / sWidth) * outWidthChars * fontAspectRatio);
@@ -689,9 +1131,17 @@
 
                             if (isSolid) brailleChar += val;
                         }
-                        asciiStr += String.fromCharCode(0x2800 + brailleChar);
+                        const brailleGlyph = String.fromCharCode(0x2800 + brailleChar);
+                        asciiStr += brailleGlyph;
+
+                        const baseIdx = (py * pixelWidth + px) * 4;
+                        const r = pixels[baseIdx] !== undefined ? pixels[baseIdx] : 0;
+                        const g = pixels[baseIdx+1] !== undefined ? pixels[baseIdx+1] : 0;
+                        const b = pixels[baseIdx+2] !== undefined ? pixels[baseIdx+2] : 0;
+                        ansiStr += `\x1b[38;2;${r};${g};${b}m${brailleGlyph}`;
                     }
                     asciiStr += "\n";
+                    ansiStr += "\x1b[0m\n";
                 }
             } else {
                 const pixelHeight = Math.floor((sHeight / sWidth) * outWidthChars * fontAspectRatio);
@@ -731,13 +1181,52 @@
                             if(x+1 < outWidthChars && y+1 < pixelHeight) grayBuffer[idx+outWidthChars+1] += err * 1/16;
                         }
 
-                        asciiStr += ramp[charIndex];
+                        const glyph = ramp[charIndex];
+                        asciiStr += glyph;
+
+                        const baseIdx = idx * 4;
+                        const r = pixels[baseIdx] !== undefined ? pixels[baseIdx] : 0;
+                        const g = pixels[baseIdx+1] !== undefined ? pixels[baseIdx+1] : 0;
+                        const b = pixels[baseIdx+2] !== undefined ? pixels[baseIdx+2] : 0;
+                        ansiStr += `\x1b[38;2;${r};${g};${b}m${glyph}`;
                     }
                     asciiStr += "\n";
+                    ansiStr += "\x1b[0m\n";
                 }
             }
             
             output.textContent = asciiStr;
+            currentAnsiStr = ansiStr;
+
+            if (isVideo && audioCheck.checked && analyserNode && !video.paused) {
+                analyserNode.getByteTimeDomainData(audioDataArray);
+                
+                let line1 = "";
+                let line2 = "";
+                let line3 = "";
+                const len = audioDataArray.length;
+                for (let x = 0; x < outWidthChars; x++) {
+                    const dataIdx = Math.floor((x / outWidthChars) * len);
+                    const val = audioDataArray[dataIdx];
+                    
+                    if (val > 148) {
+                        line1 += "█";
+                        line2 += " ";
+                        line3 += " ";
+                    } else if (val < 108) {
+                        line1 += " ";
+                        line2 += " ";
+                        line3 += "█";
+                    } else {
+                        line1 += " ";
+                        line2 += "█";
+                        line3 += " ";
+                    }
+                }
+                const visSeparator = "=".repeat(outWidthChars);
+                visualizerOutput.textContent = visSeparator + "\n" + line1 + "\n" + line2 + "\n" + line3 + "\n" + visSeparator;
+                visualizerOutput.style.display = 'block';
+            }
 
             const charLimit = parseInt(charLimitInput.value) || 0;
             const currentLength = asciiStr.length;
@@ -760,8 +1249,8 @@
             const lines = output.textContent.split('\n');
             if(lines[lines.length-1] === '') lines.pop(); 
 
-            const fontSize = 10;
-            const lineHeight = 10;
+            const fontSize = parseInt(fontSizeSlider.value) || 10;
+            const lineHeight = fontSize;
             
             const isLight = document.body.classList.contains('light-theme');
             recordCtx.fillStyle = isLight ? '#ffffff' : '#000000';
@@ -784,8 +1273,8 @@
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             
-            const fontSize = 10;
-            const lineHeight = 10;
+            const fontSize = parseInt(fontSizeSlider.value) || 10;
+            const lineHeight = fontSize;
             ctx.font = `${fontSize}px 'Courier New', Courier, monospace`;
             
             let maxWidth = 0;
@@ -831,7 +1320,10 @@
                 return;
             }
 
-            const frameCountEst = Math.ceil(video.duration * parseInt(exportFps.value));
+            const startVal = parseFloat(startTimeInput.value) || 0;
+            const endVal = parseFloat(endTimeInput.value) || video.duration;
+            const frameCountEst = Math.ceil((endVal - startVal) * parseInt(exportFps.value));
+            
             if (frameCountEst > 500) {
                 if (!confirm(`This will attempt to export roughly ${frameCountEst} files. It could spam your downloads folder or lock up your tab. Proceed?`)) return;
             }
@@ -854,13 +1346,13 @@
             exportFramesBtn.textContent = "[ STOP EXPORT ]";
             exportFramesBtn.style.color = "#ffffff";
             exportFramesBtn.style.backgroundColor = "#ff9900";
-            exportCurrentTime = 0;
+            exportCurrentTime = startVal;
             exportFrameCount = 0;
             
             video.pause();
             playPauseBtn.textContent = "[ PLAY ]";
             
-            video.currentTime = 0;
+            video.currentTime = startVal;
         });
 
         recordVideoBtn.addEventListener('click', () => {
@@ -883,8 +1375,8 @@
             const lines = output.textContent.split('\n');
             if(lines[lines.length-1] === '') lines.pop(); 
 
-            const fontSize = 10;
-            const lineHeight = 10;
+            const fontSize = parseInt(fontSizeSlider.value) || 10;
+            const lineHeight = fontSize;
             recordCtx.font = `${fontSize}px 'Courier New', Courier, monospace`;
             
             let maxWidth = 0;
@@ -931,7 +1423,8 @@
                 alert("Fucking done. Download should start now.");
             };
 
-            video.currentTime = 0;
+            const startVal = parseFloat(startTimeInput.value) || 0;
+            video.currentTime = startVal;
             if (audioCheck.checked && audioCtx && audioCtx.state === 'suspended') {
                 audioCtx.resume();
             }
@@ -961,6 +1454,15 @@
             setTimeout(() => copyTildesBtn.textContent = originalText, 2000);
         });
 
+        copyAnsiBtn.addEventListener('click', () => {
+            if(!currentMediaUrl) return alert("Upload fucking media first.");
+            navigator.clipboard.writeText(currentAnsiStr);
+            
+            const originalText = copyAnsiBtn.textContent;
+            copyAnsiBtn.textContent = "[ ANSI COPIED! ]";
+            setTimeout(() => copyAnsiBtn.textContent = originalText, 2000);
+        });
+
         downloadBtn.addEventListener('click', () => {
             if(!currentMediaUrl) return alert("Upload fucking media first.");
             const blob = new Blob([output.textContent], { type: 'text/plain' });
@@ -973,7 +1475,7 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         });
-//Test this//
+
         downloadPngBtn.addEventListener('click', () => {
             if(!output.textContent || output.textContent.includes("WAITING FOR INPUT")) {
                 alert("Render a fucking image first.");
@@ -988,6 +1490,10 @@
             a.click();
             document.body.removeChild(a);
         });
+
+        // Initialize systems
+        loadSettings();
+        setupSettingsAutoSave();
     </script>
 </body>
 </html>
