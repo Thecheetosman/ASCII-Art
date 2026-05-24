@@ -749,7 +749,7 @@
                 requestAnimationFrame(playLoop);
             } catch (e) {
                 console.error(e);
-                alert("Could not access your fucking webcam.");
+                alert("Could not access your webcam.");
             }
         });
 
@@ -831,7 +831,7 @@
                 img.src = currentMediaUrl;
                 video.pause();
             } else {
-                alert('Please upload a valid fucking image or video file.');
+                alert('Please upload a valid image or video file.');
             }
         }
 
@@ -916,7 +916,7 @@
                     exportFramesBtn.textContent = "[ EXPORT SEQUENTIAL FRAMES ]";
                     exportFramesBtn.style.backgroundColor = "transparent";
                     exportFramesBtn.style.color = "#ff9900";
-                    alert(`Fucking done. Successfully exported ${exportFrameCount} frames.`);
+                    alert(`Done. Successfully exported ${exportFrameCount} frames.`);
                 }
             }
         });
@@ -1039,7 +1039,7 @@
                         exportFramesBtn.textContent = "[ EXPORT SEQUENTIAL FRAMES ]";
                         exportFramesBtn.style.backgroundColor = "transparent";
                         exportFramesBtn.style.color = "#ff9900";
-                        alert(`Fucking done. Successfully exported ${exportFrameCount} frames.`);
+                        alert(`Done. Successfully exported ${exportFrameCount} frames.`);
                         return;
                     }
                     video.currentTime = startVal;
@@ -1594,7 +1594,7 @@ pre { margin: 0; white-space: pre; }
         }
 
         exportFramesBtn.addEventListener('click', async () => {
-            if (!isVideo) return alert("Upload a fucking video first.");
+            if (!isVideo) return alert("Upload a video first.");
             if (isExportingFrames) {
                 isExportingFrames = false;
                 exportFramesBtn.textContent = "[ EXPORT SEQUENTIAL FRAMES ]";
@@ -1639,7 +1639,7 @@ pre { margin: 0; white-space: pre; }
         });
 
         recordVideoBtn.addEventListener('click', () => {
-            if(!isVideo) return alert("Upload a fucking video first.");
+            if(!isVideo) return alert("Upload a video first.");
             
             if(isRecording) {
                 mediaRecorder.stop();
@@ -1703,7 +1703,7 @@ pre { margin: 0; white-space: pre; }
                 recordVideoBtn.textContent = "[ RECORD .WEBM ]";
                 recordVideoBtn.style.color = "#ff0000";
                 recordVideoBtn.style.backgroundColor = "transparent";
-                alert("Fucking done. Download should start now.");
+                alert("Done. Download should start now.");
             };
 
             const startVal = parseFloat(startTimeInput.value) || 0;
@@ -1718,7 +1718,7 @@ pre { margin: 0; white-space: pre; }
         });
 
         copyBackticksBtn.addEventListener('click', () => {
-            if(!currentMediaUrl) return alert("Upload fucking media first.");
+            if(!currentMediaUrl) return alert("Upload media first.");
             const forumReadyText = "```text\n" + output.textContent + "\n```";
             navigator.clipboard.writeText(forumReadyText);
             
@@ -1728,7 +1728,7 @@ pre { margin: 0; white-space: pre; }
         });
 
         copyTildesBtn.addEventListener('click', () => {
-            if(!currentMediaUrl) return alert("Upload fucking media first.");
+            if(!currentMediaUrl) return alert("Upload media first.");
             const forumReadyText = "~~~\n" + output.textContent + "\n~~~";
             navigator.clipboard.writeText(forumReadyText);
             
@@ -1738,7 +1738,7 @@ pre { margin: 0; white-space: pre; }
         });
 
         copyAnsiBtn.addEventListener('click', () => {
-            if(!currentMediaUrl) return alert("Upload fucking media first.");
+            if(!currentMediaUrl) return alert("Upload media first.");
             navigator.clipboard.writeText(currentAnsiStr);
             
             const originalText = copyAnsiBtn.textContent;
@@ -1747,7 +1747,7 @@ pre { margin: 0; white-space: pre; }
         });
 
         downloadBtn.addEventListener('click', () => {
-            if(!currentMediaUrl) return alert("Upload fucking media first.");
+            if(!currentMediaUrl) return alert("Upload media first.");
             const blob = new Blob([output.textContent], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -1761,7 +1761,7 @@ pre { margin: 0; white-space: pre; }
 
         downloadPngBtn.addEventListener('click', () => {
             if(!output.textContent || output.textContent.includes("WAITING FOR INPUT")) {
-                alert("Render a fucking image first.");
+                alert("Render a image first.");
                 return;
             }
             const canvas = renderPreToCanvas();
@@ -1776,7 +1776,7 @@ pre { margin: 0; white-space: pre; }
 
         downloadHtmlBtn.addEventListener('click', () => {
             if(!output.textContent || output.textContent.includes("WAITING FOR INPUT")) {
-                alert("Render a fucking image first.");
+                alert("Render a image first.");
                 return;
             }
             const blob = new Blob([currentHtmlStr], { type: 'text/html' });
