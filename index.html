@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>STRICT INDUSTRIAL ASCII v11.0</title>
+    <title>STRICT INDUSTRIAL ASCII v11.2</title>
     <style>
         :root {
             --bg-color: #050505;
@@ -262,6 +262,7 @@
 
             <label><input type="checkbox" id="scanlineCheck"> CRT Scanlines</label>
             <label><input type="checkbox" id="reactiveCheck"> Audio Reactive</label>
+            <button id="vowelFilterBtn" class="toggle-btn">[ VOWELS: ALLOWED ]</button>
 
             <div id="reactiveControls" style="display: none; gap: 10px;">
                 <button id="btnReactPump" class="toggle-btn">[ PUMP: OFF ]</button>
@@ -443,6 +444,7 @@
         const corruptionSlider = document.getElementById('corruptionSlider');
         const corruptionValue = document.getElementById('corruptionValue');
         const visType = document.getElementById('visType');
+        const vowelFilterBtn = document.getElementById('vowelFilterBtn');
 
         const btnReactPump = document.getElementById('btnReactPump');
         const btnReactFlash = document.getElementById('btnReactFlash');
@@ -550,6 +552,9 @@
         let reactFlashActive = false;
         let reactGlitchActive = false;
 
+        // Vowel filter state flag
+        let vowelFilterActive = false;
+
         // Settings Local Storage Persistence Logic
         function saveSettings() {
             const settings = {
@@ -577,9 +582,10 @@
                 fontSize: fontSizeSlider.value,
                 aspectPreset: aspectPreset.value,
                 corruption: corruptionSlider.value,
-                visType: visType.value
+                visType: visType.value,
+                vowelFilterActive
             };
-            localStorage.setItem('ascii_terminal_settings_v6', JSON.stringify(settings));
+            localStorage.setItem('ascii_terminal_settings_v7', JSON.stringify(settings));
         }
 
         function applyPreset(presetName) {
@@ -594,7 +600,7 @@
         }
 
         function loadSettings() {
-            const data = localStorage.getItem('ascii_terminal_settings_v6');
+            const data = localStorage.getItem('ascii_terminal_settings_v7');
             if (!data) return;
             try {
                 const s = JSON.parse(data);
@@ -637,6 +643,8 @@
                 corruptionValue.textContent = s.corruption || 0;
                 visType.value = s.visType || 'scope';
 
+                vowelFilterActive = !!s.vowelFilterActive;
+
                 // Sync aspect preset slider lock
                 if (aspectPreset.value !== 'manual') {
                     ratioSlider.disabled = true;
@@ -655,6 +663,9 @@
 
                 btnReactGlitch.classList.toggle('active', reactGlitchActive);
                 btnReactGlitch.textContent = reactGlitchActive ? "[ GLITCH: ON ]" : "[ GLITCH: OFF ]";
+
+                vowelFilterBtn.classList.toggle('active', vowelFilterActive);
+                vowelFilterBtn.textContent = vowelFilterActive ? "[ VOWELS: STRIPPED ]" : "[ VOWELS: ALLOWED ]";
 
                 document.body.classList.toggle('light-theme', themeCheck.checked);
                 thresholdContainer.style.display = charMode.value === 'braille' ? 'flex' : 'none';
@@ -837,11 +848,18 @@
 
         img.onload = () => draw();
 
+        // Safe checker prevents RangeError crash on infinite video duration (webcams/live streams)
         video.addEventListener('loadedmetadata', () => {
-            videoSlider.max = video.duration;
-            endTimeInput.max = video.duration;
-            if (parseFloat(endTimeInput.value) === 0 || isNaN(parseFloat(endTimeInput.value))) {
-                endTimeInput.value = video.duration.toFixed(1);
+            if (isFinite(video.duration)) {
+                videoSlider.max = video.duration;
+                endTimeInput.max = video.duration;
+                if (parseFloat(endTimeInput.value) === 0 || isNaN(parseFloat(endTimeInput.value))) {
+                    endTimeInput.value = video.duration.toFixed(1);
+                }
+            } else {
+                videoSlider.max = 0;
+                endTimeInput.max = 0;
+                endTimeInput.value = "0.0";
             }
             updateTimeDisplay();
             draw();
@@ -1003,13 +1021,19 @@
             debouncedDraw();
         });
 
+        // Safe timeline tracker manages live and infinite stream displays beautifully
         function updateTimeDisplay() {
             const cur = video.currentTime || 0;
             const max = video.duration || 0;
             const fps = parseFloat(exportFps.value) || 10;
             const curFrame = Math.round(cur * fps);
-            const totalFrames = Math.round(max * fps);
-            timeDisplay.textContent = `${cur.toFixed(1)}s / ${max.toFixed(1)}s (F: ${curFrame}/${totalFrames})`;
+            
+            if (isFinite(max)) {
+                const totalFrames = Math.round(max * fps);
+                timeDisplay.textContent = `${cur.toFixed(1)}s / ${max.toFixed(1)}s (F: ${curFrame}/${totalFrames})`;
+            } else {
+                timeDisplay.textContent = `${cur.toFixed(1)}s / LIVE (F: ${curFrame}/LIVE)`;
+            }
         }
 
         function playLoop(timestamp) {
@@ -1025,25 +1049,22 @@
                 return;
             }
 
-            // Trim checks (not required for live webcam streams)
-            if (!isWebcam) {
-                const startVal = parseFloat(startTimeInput.value) || 0;
-                const endVal = parseFloat(endTimeInput.value) || video.duration;
-                if (video.currentTime >= endVal) {
-                    if (isRecording) {
-                        mediaRecorder.stop();
-                        return;
-                    }
-                    if (isExportingFrames) {
-                        isExportingFrames = false;
-                        exportFramesBtn.textContent = "[ EXPORT SEQUENTIAL FRAMES ]";
-                        exportFramesBtn.style.backgroundColor = "transparent";
-                        exportFramesBtn.style.color = "#ff9900";
-                        alert(`Done. Successfully exported ${exportFrameCount} frames.`);
-                        return;
-                    }
-                    video.currentTime = startVal;
+            const startVal = parseFloat(startTimeInput.value) || 0;
+            const endVal = parseFloat(endTimeInput.value) || video.duration;
+            if (video.currentTime >= endVal) {
+                if (isRecording) {
+                    mediaRecorder.stop();
+                    return;
                 }
+                if (isExportingFrames) {
+                    isExportingFrames = false;
+                    exportFramesBtn.textContent = "[ EXPORT SEQUENTIAL FRAMES ]";
+                    exportFramesBtn.style.backgroundColor = "transparent";
+                    exportFramesBtn.style.color = "#ff9900";
+                    alert(`Done. Successfully exported ${exportFrameCount} frames.`);
+                    return;
+                }
+                video.currentTime = startVal;
             }
 
             let delay = isRecording ? 30 : 60; 
@@ -1150,6 +1171,14 @@
 
         reactiveCheck.addEventListener('change', (e) => {
             reactiveControls.style.display = e.target.checked ? 'flex' : 'none';
+        });
+
+        vowelFilterBtn.addEventListener('click', () => {
+            vowelFilterActive = !vowelFilterActive;
+            vowelFilterBtn.classList.toggle('active', vowelFilterActive);
+            vowelFilterBtn.textContent = vowelFilterActive ? "[ VOWELS: STRIPPED ]" : "[ VOWELS: ALLOWED ]";
+            saveSettings();
+            debouncedDraw();
         });
 
         fontSizeSlider.addEventListener('input', (e) => {
@@ -1355,6 +1384,13 @@
                 const pixels = ctx.getImageData(0, 0, outWidthChars, pixelHeight).data;
                 let ramp = mode === 'custom' ? customInput.value : ramps[mode];
                 if (!ramp) ramp = " "; 
+                
+                // Real-time vowel purging prior to pixel mapping
+                if (vowelFilterActive) {
+                    ramp = ramp.replace(/[aeiouAEIOU]/g, '');
+                    if (!ramp) ramp = " ";
+                }
+
                 if (invert) ramp = ramp.split('').reverse().join('');
 
                 let grayBuffer = new Float32Array(outWidthChars * pixelHeight);
