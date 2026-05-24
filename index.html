@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>STRICT INDUSTRIAL ASCII v11.2</title>
+    <title>STRICT INDUSTRIAL ASCII v19.2</title>
     <style>
         :root {
             --bg-color: #050505;
@@ -260,9 +260,19 @@
                 <option value="eq">Vis: Spectral EQ</option>
             </select>
 
+            <select id="colorFilter">
+                <option value="none">Color: Default RGB</option>
+                <option value="matrix">Color: Matrix Green</option>
+                <option value="amber">Color: VT220 Amber</option>
+                <option value="alert">Color: Red Alert</option>
+                <option value="cyber">Color: Cyberpunk Pink</option>
+            </select>
+
             <label><input type="checkbox" id="scanlineCheck"> CRT Scanlines</label>
             <label><input type="checkbox" id="reactiveCheck"> Audio Reactive</label>
             <button id="vowelFilterBtn" class="toggle-btn">[ VOWELS: ALLOWED ]</button>
+            <button id="borderFrameBtn" class="toggle-btn">[ FRAME BORDER: OFF ]</button>
+            <input type="text" id="customMetadataInput" value="TERMINAL" style="display: none; width: 120px;" placeholder="BOTTOM BORDER TEXT" title="Custom text overlay for bottom border">
 
             <div id="reactiveControls" style="display: none; gap: 10px;">
                 <button id="btnReactPump" class="toggle-btn">[ PUMP: OFF ]</button>
@@ -281,6 +291,12 @@
             </div>
             <span id="timeDisplay" style="width: 250px; text-align: right; font-family: monospace;">0.0s / 0.0s (F: 0/0)</span>
             
+            <div class="slider-wrapper">
+                <label>Speed:</label>
+                <input type="range" id="speedSlider" min="0.25" max="2.0" step="0.25" value="1.0">
+                <span class="value-display" id="speedValue">1.00x</span>
+            </div>
+
             <div class="slider-wrapper">
                 <label>Trim In (s):</label>
                 <input type="number" id="startTimeInput" value="0" min="0" step="0.1" style="width: 70px;">
@@ -367,6 +383,7 @@
             <button id="downloadPngBtn">[ DL .PNG ]</button>
             <button id="downloadHtmlBtn" style="border-color: #00ffff; color: #00ffff;">[ DL .HTML ]</button>
             <button id="recordVideoBtn" style="display: none; border-color: #ff0000; color: #ff0000;">[ RECORD .WEBM ]</button>
+            <button id="recordColorBtn" style="display: none; border-color: #00ff00; color: #00ff00;" class="toggle-btn">[ RECORD COLOR: OFF ]</button>
             <button id="helpBtn" style="border-color: #00ffff; color: #00ffff;">[ HELP / KEYBINDS ]</button>
         </div>
     </div>
@@ -399,10 +416,11 @@
             <p style="margin: 0 0 5px 0;">- <span style="font-weight: bold;">COPY ANSI</span> : Copies 24-bit terminal RGB escape sequences to clipboard.</p>
             <p style="margin: 0 0 5px 0;">- <span style="font-weight: bold;">EXPORT SEQUENTIAL FRAMES</span> : Step-renders video directly. Select local directory folder for seamless writes (Chrome/Edge only) or run sequential downloads.</p>
             <p style="margin: 0 0 5px 0;">- <span style="font-weight: bold;">RECORD .WEBM</span> : Captures frames real-time and mixes the crushed 4-bit audio directly into a synchronized WebM video file.</p>
-            <p style="margin: 0 0 15px 0;">- <span style="font-weight: bold;">DL .HTML</span> : Compiles a fully styled, color-grouped HTML copy of your frame.</p>
+            <p style="margin: 0 0 5px 0;">- <span style="font-weight: bold;">RECORD COLOR</span> : Toggles color-pencil canvas painting on or off for the WebM recording pipeline.</p>
+            <p style="margin: 0 0 15px 0;">- <span style="font-weight: bold;">DL .HTML</span> : If media is static, downloads current frame. If video is loaded, prompts to either export static frame or compile selected Trim Range as an animated HTML player.</p>
 
             <p style="font-weight: bold; color: var(--accent-color); margin-bottom: 5px;">[ TIMELINE TIMING TRIM ]</p>
-            <p style="margin: 0 0 15px 0;">- Restrict standard loop playback, sequential frame exports, and WebM video recordings using the Trim In and Trim Out numeric range markers.</p>
+            <p style="margin: 0 0 15px 0;">- Restrict standard loop playback, sequential frame exports, animated HTML compilations, and WebM video recordings using the Trim In and Trim Out numeric range markers.</p>
 
             <p style="font-weight: bold; color: var(--accent-color); margin-bottom: 5px;">[ MODULAR AUDIO REACTIVITY ]</p>
             <p style="margin: 0 0 15px 0;">- Enable Audio Reactive controls to let volume RMS scale, glitch skew, or flash text brightness cumulatively with the audio output.</p>
@@ -445,6 +463,9 @@
         const corruptionValue = document.getElementById('corruptionValue');
         const visType = document.getElementById('visType');
         const vowelFilterBtn = document.getElementById('vowelFilterBtn');
+        const borderFrameBtn = document.getElementById('borderFrameBtn');
+        const colorFilter = document.getElementById('colorFilter');
+        const customMetadataInput = document.getElementById('customMetadataInput');
 
         const btnReactPump = document.getElementById('btnReactPump');
         const btnReactFlash = document.getElementById('btnReactFlash');
@@ -457,6 +478,7 @@
         const downloadPngBtn = document.getElementById('downloadPngBtn');
         const downloadHtmlBtn = document.getElementById('downloadHtmlBtn');
         const recordVideoBtn = document.getElementById('recordVideoBtn');
+        const recordColorBtn = document.getElementById('recordColorBtn');
         const helpBtn = document.getElementById('helpBtn');
         const helpModal = document.getElementById('helpModal');
         const closeHelpBtn = document.getElementById('closeHelpBtn');
@@ -479,6 +501,8 @@
         const timeDisplay = document.getElementById('timeDisplay');
         const startTimeInput = document.getElementById('startTimeInput');
         const endTimeInput = document.getElementById('endTimeInput');
+        const speedSlider = document.getElementById('speedSlider');
+        const speedValue = document.getElementById('speedValue');
 
         const ramps = {
             standard: " .:-=+*#%@",
@@ -543,9 +567,14 @@
         let webcamStream = null;
         let isWebcam = false;
 
+        // HTML Video compiling state flags
+        let isExportingHtmlVideo = false;
+        let htmlVideoFrames = [];
+
         // ANSI Output & HTML Export Cache
         let currentAnsiStr = "";
         let currentHtmlStr = "";
+        let currentRawHtmlStr = "";
 
         // Modular Audio Reactive State Flags
         let reactPumpActive = false;
@@ -554,6 +583,15 @@
 
         // Vowel filter state flag
         let vowelFilterActive = false;
+
+        // Double-Line Border state flag
+        let borderFrameActive = false;
+
+        // Color recording state flag
+        let recordColorActive = false;
+
+        // Frame colors cache array (stores [r,g,b] arrays for canvas painting during exports)
+        let currentFrameColors = [];
 
         // Settings Local Storage Persistence Logic
         function saveSettings() {
@@ -583,9 +621,14 @@
                 aspectPreset: aspectPreset.value,
                 corruption: corruptionSlider.value,
                 visType: visType.value,
-                vowelFilterActive
+                vowelFilterActive,
+                borderFrameActive,
+                playbackSpeed: speedSlider.value,
+                colorFilter: colorFilter.value,
+                customMetadata: customMetadataInput.value,
+                recordColorActive
             };
-            localStorage.setItem('ascii_terminal_settings_v7', JSON.stringify(settings));
+            localStorage.setItem('ascii_terminal_settings_v9', JSON.stringify(settings));
         }
 
         function applyPreset(presetName) {
@@ -599,8 +642,25 @@
             root.style.setProperty('--pre-color', p.pre);
         }
 
+        // Duotone mapping processor calculated based on gray-luminance values
+        function mapColor(r, g, b) {
+            const filterType = colorFilter.value;
+            if (filterType === 'none') return [r, g, b];
+            const bright = 0.299 * r + 0.587 * g + 0.114 * b;
+            if (filterType === 'matrix') {
+                return [Math.floor(bright * 0.1), Math.floor(bright), Math.floor(bright * 0.1)];
+            } else if (filterType === 'amber') {
+                return [Math.floor(bright), Math.floor(bright * 0.69), 0];
+            } else if (filterType === 'alert') {
+                return [Math.floor(bright), 0, 0];
+            } else if (filterType === 'cyber') {
+                return [Math.floor(bright), 0, Math.floor(bright * 0.5)];
+            }
+            return [r, g, b];
+        }
+
         function loadSettings() {
-            const data = localStorage.getItem('ascii_terminal_settings_v7');
+            const data = localStorage.getItem('ascii_terminal_settings_v9');
             if (!data) return;
             try {
                 const s = JSON.parse(data);
@@ -644,6 +704,16 @@
                 visType.value = s.visType || 'scope';
 
                 vowelFilterActive = !!s.vowelFilterActive;
+                borderFrameActive = !!s.borderFrameActive;
+
+                speedSlider.value = s.playbackSpeed || 1.0;
+                speedValue.textContent = `${parseFloat(speedSlider.value).toFixed(2)}x`;
+                video.playbackRate = parseFloat(speedSlider.value);
+
+                colorFilter.value = s.colorFilter || 'none';
+                customMetadataInput.value = s.customMetadata || 'TERMINAL';
+
+                recordColorActive = !!s.recordColorActive;
 
                 // Sync aspect preset slider lock
                 if (aspectPreset.value !== 'manual') {
@@ -667,6 +737,13 @@
                 vowelFilterBtn.classList.toggle('active', vowelFilterActive);
                 vowelFilterBtn.textContent = vowelFilterActive ? "[ VOWELS: STRIPPED ]" : "[ VOWELS: ALLOWED ]";
 
+                borderFrameBtn.classList.toggle('active', borderFrameActive);
+                borderFrameBtn.textContent = borderFrameActive ? "[ FRAME BORDER: ON ]" : "[ FRAME BORDER: OFF ]";
+                customMetadataInput.style.display = borderFrameActive ? 'inline-block' : 'none';
+
+                recordColorBtn.classList.toggle('active', recordColorActive);
+                recordColorBtn.textContent = recordColorActive ? "[ RECORD COLOR: ON ]" : "[ RECORD COLOR: OFF ]";
+
                 document.body.classList.toggle('light-theme', themeCheck.checked);
                 thresholdContainer.style.display = charMode.value === 'braille' ? 'flex' : 'none';
                 customInput.style.display = charMode.value === 'custom' ? 'inline-block' : 'none';
@@ -682,7 +759,8 @@
                 charMode, customInput, invertCheck, themeCheck, ditherCheck,
                 audioCheck, charLimitInput, exportFormat, exportFps,
                 startTimeInput, endTimeInput, terminalPreset, scanlineCheck,
-                reactiveCheck, fontSizeSlider, aspectPreset, corruptionSlider, visType
+                reactiveCheck, fontSizeSlider, aspectPreset, corruptionSlider, visType,
+                speedSlider, colorFilter, customMetadataInput
             ];
             inputs.forEach(input => {
                 input.addEventListener('change', saveSettings);
@@ -743,6 +821,7 @@
                 videoControls.style.display = 'flex';
                 frameExportControls.style.display = 'none'; 
                 recordVideoBtn.style.display = 'none'; 
+                recordColorBtn.style.display = 'none';
                 
                 videoSlider.style.display = 'none';
                 startTimeInput.disabled = true;
@@ -776,6 +855,7 @@
             videoControls.style.display = 'none';
             frameExportControls.style.display = 'none';
             recordVideoBtn.style.display = 'none';
+            recordColorBtn.style.display = 'none';
             videoSlider.style.display = 'inline-block';
             startTimeInput.disabled = false;
             endTimeInput.disabled = false;
@@ -823,6 +903,7 @@
                 videoControls.style.display = 'flex';
                 frameExportControls.style.display = 'flex';
                 recordVideoBtn.style.display = 'inline-block';
+                recordColorBtn.style.display = 'inline-block';
                 output.textContent = "LOADING VIDEO...";
                 video.src = currentMediaUrl;
                 playPauseBtn.textContent = "[ PLAY ]";
@@ -838,6 +919,7 @@
                 videoControls.style.display = 'none';
                 frameExportControls.style.display = 'none';
                 recordVideoBtn.style.display = 'none';
+                recordColorBtn.style.display = 'none';
                 output.textContent = "LOADING IMAGE...";
                 img.src = currentMediaUrl;
                 video.pause();
@@ -866,7 +948,7 @@
         });
 
         video.addEventListener('seeked', async () => {
-            if (video.paused && !isRecording && !isExportingFrames) {
+            if (video.paused && !isRecording && !isExportingFrames && !isExportingHtmlVideo) {
                 draw(); 
             }
 
@@ -937,6 +1019,96 @@
                     alert(`Done. Successfully exported ${exportFrameCount} frames.`);
                 }
             }
+
+            // Sequential animated HTML frame-compiling loop
+            if (isExportingHtmlVideo) {
+                draw(); // Populates currentRawHtmlStr with clean coloring spans
+
+                htmlVideoFrames.push(currentRawHtmlStr);
+
+                exportFrameCount++;
+                const fps = parseFloat(exportFps.value) || 10;
+                exportCurrentTime += (1 / fps);
+
+                const endVal = parseFloat(endTimeInput.value) || video.duration;
+                if (exportCurrentTime < endVal && isExportingHtmlVideo) {
+                    video.currentTime = exportCurrentTime;
+                } else {
+                    isExportingHtmlVideo = false;
+                    downloadHtmlBtn.textContent = "[ DL .HTML ]";
+                    downloadHtmlBtn.style.backgroundColor = "transparent";
+                    downloadHtmlBtn.style.color = "#00ffff";
+
+                    // Compile the final animated HTML player package
+                    const isLight = document.body.classList.contains('light-theme');
+                    const bgHex = isLight ? '#ffffff' : '#000000';
+                    const fgHex = isLight ? '#000000' : '#d1d1d1';
+                    const fs = fontSizeSlider.value;
+
+                    // Serialize raw HTML strings into a JS array matching characters cleanly
+                    const serializedFrames = htmlVideoFrames.map(f => "`" + f.replace(/`/g, "\\`").replace(/\$/g, "\\$") + "`").join(",\n");
+
+                    const animHtmlDoc = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ASCII Video Render</title>
+<style>
+body { background: ${bgHex}; color: ${fgHex}; margin: 0; padding: 20px; font-family: 'Courier New', Courier, monospace; font-size: ${fs}px; line-height: ${fs}px; letter-spacing: 0; text-align: center; }
+pre { margin: 20px auto; white-space: pre; display: inline-block; text-align: left; background: ${bgHex === '#ffffff' ? '#ffffff' : '#000000'}; padding: 15px; border: 2px solid ${isLight ? '#9e9e9e' : '#3a0000'}; }
+.btn { padding: 8px 12px; font-family: inherit; font-weight: bold; background: ${bgHex}; color: ${isLight ? '#d32f2f' : '#9e1a1a'}; border: 1px solid ${isLight ? '#9e9e9e' : '#3a0000'}; cursor: pointer; text-transform: uppercase; }
+.btn:hover { background: ${isLight ? '#d32f2f' : '#9e1a1a'}; color: #fff; }
+</style>
+</head>
+<body>
+<div>
+    <button id="playPauseBtn" class="btn">[ PAUSE ]</button>
+</div>
+<pre id="output"></pre>
+<script>
+const frames = [
+${serializedFrames}
+];
+const fps = ${fps};
+let index = 0;
+let isPlaying = true;
+const output = document.getElementById('output');
+const playPauseBtn = document.getElementById('playPauseBtn');
+
+function tick() {
+    if (!isPlaying) return;
+    output.innerHTML = frames[index];
+    index = (index + 1) % frames.length;
+}
+let timer = setInterval(tick, 1000 / fps);
+
+playPauseBtn.addEventListener('click', () => {
+    isPlaying = !isPlaying;
+    if (isPlaying) {
+        timer = setInterval(tick, 1000 / fps);
+        playPauseBtn.textContent = "[ PAUSE ]";
+    } else {
+        clearInterval(timer);
+        playPauseBtn.textContent = "[ PLAY ]";
+    }
+});
+output.innerHTML = frames[0];
+<\/script>
+</body>
+</html>`;
+
+                    const blob = new Blob([animHtmlDoc], { type: 'text/html' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `ascii_animated_video.html`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    alert(`Successfully compiled and downloaded ${exportFrameCount} frames into a standalone HTML player.`);
+                }
+            }
         });
 
         video.addEventListener('timeupdate', () => {
@@ -979,6 +1151,12 @@
                 exportFramesBtn.style.backgroundColor = "transparent";
                 exportFramesBtn.style.color = "#ff9900";
             }
+            if (isExportingHtmlVideo) {
+                isExportingHtmlVideo = false;
+                downloadHtmlBtn.textContent = "[ DL .HTML ]";
+                downloadHtmlBtn.style.backgroundColor = "transparent";
+                downloadHtmlBtn.style.color = "#00ffff";
+            }
             
             outputContainer.style.transform = "";
             outputContainer.style.filter = "";
@@ -1009,7 +1187,7 @@
         });
 
         videoSlider.addEventListener('input', (e) => {
-            if (isRecording || isExportingFrames) return; 
+            if (isRecording || isExportingFrames || isExportingHtmlVideo) return; 
             video.currentTime = e.target.value;
             updateTimeDisplay();
             if (video.paused) debouncedDraw();
@@ -1019,6 +1197,13 @@
         exportFps.addEventListener('input', () => {
             updateTimeDisplay();
             debouncedDraw();
+        });
+
+        speedSlider.addEventListener('input', (e) => {
+            const speed = parseFloat(e.target.value);
+            speedValue.textContent = `${speed.toFixed(2)}x`;
+            video.playbackRate = speed;
+            saveSettings();
         });
 
         // Safe timeline tracker manages live and infinite stream displays beautifully
@@ -1062,6 +1247,13 @@
                     exportFramesBtn.style.backgroundColor = "transparent";
                     exportFramesBtn.style.color = "#ff9900";
                     alert(`Done. Successfully exported ${exportFrameCount} frames.`);
+                    return;
+                }
+                if (isExportingHtmlVideo) {
+                    isExportingHtmlVideo = false;
+                    downloadHtmlBtn.textContent = "[ DL .HTML ]";
+                    downloadHtmlBtn.style.backgroundColor = "transparent";
+                    downloadHtmlBtn.style.color = "#00ffff";
                     return;
                 }
                 video.currentTime = startVal;
@@ -1181,6 +1373,22 @@
             debouncedDraw();
         });
 
+        borderFrameBtn.addEventListener('click', () => {
+            borderFrameActive = !borderFrameActive;
+            borderFrameBtn.classList.toggle('active', borderFrameActive);
+            borderFrameBtn.textContent = borderFrameActive ? "[ FRAME BORDER: ON ]" : "[ FRAME BORDER: OFF ]";
+            customMetadataInput.style.display = borderFrameActive ? 'inline-block' : 'none';
+            saveSettings();
+            debouncedDraw();
+        });
+
+        recordColorBtn.addEventListener('click', () => {
+            recordColorActive = !recordColorActive;
+            recordColorBtn.classList.toggle('active', recordColorActive);
+            recordColorBtn.textContent = recordColorActive ? "[ RECORD COLOR: ON ]" : "[ RECORD COLOR: OFF ]";
+            saveSettings();
+        });
+
         fontSizeSlider.addEventListener('input', (e) => {
             const val = e.target.value;
             fontSizeValue.textContent = val;
@@ -1206,6 +1414,14 @@
         });
 
         visType.addEventListener('change', () => {
+            debouncedDraw();
+        });
+
+        colorFilter.addEventListener('change', () => {
+            debouncedDraw();
+        });
+
+        customMetadataInput.addEventListener('input', () => {
             debouncedDraw();
         });
 
@@ -1279,6 +1495,9 @@
             let openSpan = false;
             let lastR = -1, lastG = -1, lastB = -1;
 
+            // Clear the frame color cache
+            currentFrameColors = [];
+
             if (mode === 'braille') {
                 const outHeightChars = Math.floor((sHeight / sWidth) * outWidthChars * fontAspectRatio);
                 const pixelWidth = outWidthChars * 2;
@@ -1302,6 +1521,8 @@
                     if (corruption > 0 && Math.random() < (corruption / 350)) {
                         tearPadding = Math.floor(Math.random() * (outWidthChars * 0.12));
                     }
+
+                    let rowColors = [];
 
                     for (let x = 0; x < outWidthChars; x++) {
                         // Apply offset skew if row is torn
@@ -1350,10 +1571,13 @@
                         asciiStr += brailleGlyph;
 
                         const baseIdx = (py * pixelWidth + px) * 4;
-                        const r = pixels[baseIdx] !== undefined ? pixels[baseIdx] : 0;
-                        const g = pixels[baseIdx+1] !== undefined ? pixels[baseIdx+1] : 0;
-                        const b = pixels[baseIdx+2] !== undefined ? pixels[baseIdx+2] : 0;
+                        const rawR = pixels[baseIdx] !== undefined ? pixels[baseIdx] : 0;
+                        const rawG = pixels[baseIdx+1] !== undefined ? pixels[baseIdx+1] : 0;
+                        const rawB = pixels[baseIdx+2] !== undefined ? pixels[baseIdx+2] : 0;
+                        const [r, g, b] = mapColor(rawR, rawG, rawB);
+
                         ansiStr += `\x1b[38;2;${r};${g};${b}m${brailleGlyph}`;
+                        rowColors.push([r, g, b]);
 
                         // Optimizing HTML span compiling: Group continuous identical colors
                         if (r !== lastR || g !== lastG || b !== lastB) {
@@ -1366,6 +1590,7 @@
                     }
                     asciiStr += "\n";
                     ansiStr += "\x1b[0m\n";
+                    currentFrameColors.push(rowColors);
                     
                     if (openSpan) {
                         htmlBody += "</span>";
@@ -1407,6 +1632,8 @@
                         tearPadding = Math.floor(Math.random() * (outWidthChars * 0.12));
                     }
 
+                    let rowColors = [];
+
                     for (let x = 0; x < outWidthChars; x++) {
                         let targetX = x;
                         if (tearPadding > 0) {
@@ -1441,10 +1668,13 @@
                         asciiStr += glyph;
 
                         const baseIdx = idx * 4;
-                        const r = pixels[baseIdx] !== undefined ? pixels[baseIdx] : 0;
-                        const g = pixels[baseIdx+1] !== undefined ? pixels[baseIdx+1] : 0;
-                        const b = pixels[baseIdx+2] !== undefined ? pixels[baseIdx+2] : 0;
+                        const rawR = pixels[baseIdx] !== undefined ? pixels[baseIdx] : 0;
+                        const rawG = pixels[baseIdx+1] !== undefined ? pixels[baseIdx+1] : 0;
+                        const rawB = pixels[baseIdx+2] !== undefined ? pixels[baseIdx+2] : 0;
+                        const [r, g, b] = mapColor(rawR, rawG, rawB);
+
                         ansiStr += `\x1b[38;2;${r};${g};${b}m${glyph}`;
+                        rowColors.push([r, g, b]);
 
                         // Optimizing HTML span compiling: Group continuous identical colors
                         if (r !== lastR || g !== lastG || b !== lastB) {
@@ -1457,6 +1687,7 @@
                     }
                     asciiStr += "\n";
                     ansiStr += "\x1b[0m\n";
+                    currentFrameColors.push(rowColors);
 
                     if (openSpan) {
                         htmlBody += "</span>";
@@ -1467,6 +1698,77 @@
                 }
             }
             
+            // Capture raw compiled span elements for HTML video compiling
+            currentRawHtmlStr = htmlBody;
+
+            // Procedural Double-Line Frame Border Wrapping
+            if (borderFrameActive) {
+                const lines = asciiStr.split('\n');
+                if (lines[lines.length - 1] === '') lines.pop();
+
+                const ansiLines = ansiStr.split('\n');
+                if (ansiLines[ansiLines.length - 1] === '') ansiLines.pop();
+
+                const htmlLines = htmlBody.split('\n');
+                if (htmlLines[htmlLines.length - 1] === '') htmlLines.pop();
+
+                let borderedAscii = "";
+                let borderedAnsi = "";
+                let borderedHtml = "";
+
+                let topLabel = "══";
+                if (isVideo) {
+                    const fps = parseFloat(exportFps.value) || 10;
+                    const curFrame = Math.round(video.currentTime * fps);
+                    topLabel = `═ FRAME: ${String(curFrame).padStart(5, '0')} ═`;
+                } else {
+                    topLabel = "═ IMAGE ═";
+                }
+
+                let topBorder = "";
+                if (outWidthChars >= topLabel.length + 4) {
+                    const leftPadding = Math.floor((outWidthChars - topLabel.length) / 2);
+                    const rightPadding = outWidthChars - topLabel.length - leftPadding;
+                    topBorder = "╔" + "═".repeat(leftPadding) + topLabel + "═".repeat(rightPadding) + "╗";
+                } else {
+                    topBorder = "╔" + "═".repeat(outWidthChars) + "╗";
+                }
+
+                const bottomLabel = customMetadataInput.value ? `═ ${customMetadataInput.value.toUpperCase()} ═` : "";
+                let bottomBorder = "";
+                if (bottomLabel && outWidthChars >= bottomLabel.length + 4) {
+                    const leftPadding = Math.floor((outWidthChars - bottomLabel.length) / 2);
+                    const rightPadding = outWidthChars - bottomLabel.length - leftPadding;
+                    bottomBorder = "╚" + "═".repeat(leftPadding) + bottomLabel + "═".repeat(rightPadding) + "╝";
+                } else {
+                    bottomBorder = "╚" + "═".repeat(outWidthChars) + "╝";
+                }
+
+                borderedAscii += topBorder + "\n";
+                borderedAnsi += topBorder + "\n";
+                borderedHtml += topBorder + "\n";
+
+                // Defensive, zip-style lines iterator avoids length mismatches (e.g. Braille mode scope shadowing)
+                const maxLines = Math.max(lines.length, ansiLines.length, htmlLines.length);
+                for (let i = 0; i < maxLines; i++) {
+                    const lineVal = lines[i] || "";
+                    const ansiVal = ansiLines[i] || "";
+                    const htmlVal = htmlLines[i] || "";
+
+                    borderedAscii += "║" + lineVal + "║\n";
+                    borderedAnsi += "║" + ansiVal + "║\n";
+                    borderedHtml += "║" + htmlVal + "║\n";
+                }
+
+                borderedAscii += bottomBorder + "\n";
+                borderedAnsi += bottomBorder + "\n";
+                borderedHtml += bottomBorder + "\n";
+
+                asciiStr = borderedAscii;
+                ansiStr = borderedAnsi;
+                htmlBody = borderedHtml;
+            }
+
             output.textContent = asciiStr;
             currentAnsiStr = ansiStr;
 
@@ -1575,13 +1877,47 @@ pre { margin: 0; white-space: pre; }
             recordCtx.fillStyle = isLight ? '#ffffff' : '#000000';
             recordCtx.fillRect(0, 0, recordCanvas.width, recordCanvas.height);
             
-            recordCtx.fillStyle = isLight ? '#000000' : '#d1d1d1';
             recordCtx.textAlign = 'left';
             recordCtx.textBaseline = 'top';
             recordCtx.font = `${fontSize}px 'Courier New', Courier, monospace`;
             
+            const charWidth = recordCtx.measureText("A").width;
+
             for(let i=0; i<lines.length; i++) {
-                recordCtx.fillText(lines[i], 15, 15 + (i * lineHeight));
+                const line = lines[i];
+                let rowColorData = null;
+
+                // Sync canvas character offsets if double-line framing is active
+                if (recordColorActive && borderFrameActive) {
+                    if (i > 0 && i < lines.length - 1) {
+                        rowColorData = currentFrameColors[i - 1];
+                    }
+                } else if (recordColorActive) {
+                    rowColorData = currentFrameColors[i];
+                }
+
+                if (rowColorData) {
+                    for (let j = 0; j < line.length; j++) {
+                        const char = line[j];
+                        let color = [158, 26, 26]; // Default to terminal accent red for outer border characters
+
+                        if (borderFrameActive) {
+                            if (j > 0 && j < line.length - 1) {
+                                color = rowColorData[j - 1] || [209, 209, 209];
+                            } else {
+                                color = isLight ? [211, 47, 47] : [158, 26, 26]; // Accent Red
+                            }
+                        } else {
+                            color = rowColorData[j] || [209, 209, 209];
+                        }
+
+                        recordCtx.fillStyle = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
+                        recordCtx.fillText(char, 15 + (j * charWidth), 15 + (i * lineHeight));
+                    }
+                } else {
+                    recordCtx.fillStyle = isLight ? '#000000' : '#d1d1d1';
+                    recordCtx.fillText(line, 15, 15 + (i * lineHeight));
+                }
             }
         }
 
@@ -1797,7 +2133,7 @@ pre { margin: 0; white-space: pre; }
 
         downloadPngBtn.addEventListener('click', () => {
             if(!output.textContent || output.textContent.includes("WAITING FOR INPUT")) {
-                alert("Render a image first.");
+                alert("Render an image first.");
                 return;
             }
             const canvas = renderPreToCanvas();
@@ -1810,11 +2146,7 @@ pre { margin: 0; white-space: pre; }
             document.body.removeChild(a);
         });
 
-        downloadHtmlBtn.addEventListener('click', () => {
-            if(!output.textContent || output.textContent.includes("WAITING FOR INPUT")) {
-                alert("Render a image first.");
-                return;
-            }
+        function downloadSingleFrameHtml() {
             const blob = new Blob([currentHtmlStr], { type: 'text/html' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -1824,6 +2156,47 @@ pre { margin: 0; white-space: pre; }
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
+        }
+
+        downloadHtmlBtn.addEventListener('click', async () => {
+            if (!output.textContent || output.textContent.includes("WAITING FOR INPUT")) {
+                alert("Render an image or load a video first.");
+                return;
+            }
+
+            if (!isVideo) {
+                downloadSingleFrameHtml();
+                return;
+            }
+
+            const exportAnim = confirm("Would you like to export the selected Trim Range as an animated HTML video player? (Select Cancel to export only the current static frame)");
+            if (!exportAnim) {
+                downloadSingleFrameHtml();
+                return;
+            }
+
+            // Start animated HTML compilation process
+            const startVal = parseFloat(startTimeInput.value) || 0;
+            const endVal = parseFloat(endTimeInput.value) || video.duration;
+            const frameCountEst = Math.ceil((endVal - startVal) * parseInt(exportFps.value));
+
+            if (frameCountEst > 300) {
+                if (!confirm(`This will step-render roughly ${frameCountEst} frames and package them into a single HTML file. This may take some time. Proceed?`)) return;
+            }
+
+            isExportingHtmlVideo = true;
+            downloadHtmlBtn.textContent = "[ RENDERING... ]";
+            downloadHtmlBtn.style.backgroundColor = "#00ffff";
+            downloadHtmlBtn.style.color = "#000000";
+
+            htmlVideoFrames = [];
+            exportCurrentTime = startVal;
+            exportFrameCount = 0;
+
+            video.pause();
+            playPauseBtn.textContent = "[ PLAY ]";
+            
+            video.currentTime = startVal;
         });
 
         // Initialize systems
