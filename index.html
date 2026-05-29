@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>STRICT INDUSTRIAL ASCII v12</title>
+    <title>STRICT INDUSTRIAL ASCII v13.0</title>
     <style>
         :root {
             --bg-color: #050505;
@@ -13,6 +13,7 @@
             --border-color: #3a0000;
             --pre-color: #d1d1d1;
             --font-size: 10px;
+            --bloom-glow: none;
         }
 
         body.light-theme {
@@ -90,6 +91,7 @@
             color: var(--pre-color);
             display: block;
             text-align: left;
+            text-shadow: var(--bloom-glow);
         }
 
         #visualizerOutput {
@@ -240,6 +242,13 @@
             </select>
 
             <input type="text" id="customInput" value=" .-=+*#%@" style="display: none;" title="Custom character ramp from dark to light">
+            <select id="rampPreset" style="display: none;" title="Themed custom character ramps">
+                <option value="custom">Preset: Custom</option>
+                <option value="binary">Preset: Binary (0/1)</option>
+                <option value="blocks">Preset: Brutalist Blocks (░▒▓█)</option>
+                <option value="math">Preset: Math Symbols</option>
+                <option value="minimal">Preset: Minimal Punctuation</option>
+            </select>
 
             <label><input type="checkbox" id="invertCheck"> Invert Colors</label>
             <label><input type="checkbox" id="themeCheck"> Light Preview</label>
@@ -361,6 +370,12 @@
             </div>
 
             <div class="slider-wrapper">
+                <label>Bloom:</label>
+                <input type="range" id="bloomSlider" min="0" max="15" value="0">
+                <span class="value-display" id="bloomValue">0</span>
+            </div>
+
+            <div class="slider-wrapper">
                 <label>Font Size:</label>
                 <input type="range" id="fontSizeSlider" min="5" max="24" value="10">
                 <span class="value-display" id="fontSizeValue">10</span>
@@ -423,7 +438,17 @@
             <p style="margin: 0 0 15px 0;">- Restrict standard loop playback, sequential frame exports, animated HTML compilations, and WebM video recordings using the Trim In and Trim Out numeric range markers.</p>
 
             <p style="font-weight: bold; color: var(--accent-color); margin-bottom: 5px;">[ MODULAR AUDIO REACTIVITY ]</p>
-            <p style="margin: 0 0 15px 0;">- Enable Audio Reactive controls to let volume RMS scale, glitch skew, or flash text brightness cumulatively with the audio output.</p>
+            <p style="margin: 0 0 15px 0;">- Enable Audio Reactive controls to let volume RMS scale (Pump), glitch skew (Glitch), or flash text brightness (Flash) cumulatively with the audio output.</p>
+
+            <p style="font-weight: bold; color: var(--accent-color); margin-bottom: 5px;">[ GEOMETRY & FRAMING ]</p>
+            <p style="margin: 0 0 5px 0;">- <span style="font-weight: bold;">FRAME BORDER</span> : Wraps output in a clean, procedural double-line ASCII box. Incorporates live frame metrics (top) and custom bottom title stamps.</p>
+            <p style="margin: 0 0 15px 0;">- <span style="font-weight: bold;">ASPECT PRESET</span> : Instantly locks and disables the aspect ratio slider to match the exact mathematical font spacing of Discord, Slack, or GitHub Markdown.</p>
+
+            <p style="font-weight: bold; color: var(--accent-color); margin-bottom: 5px;">[ AMBIENCE & THEMES ]</p>
+            <p style="margin: 0 0 5px 0;">- <span style="font-weight: bold;">STYLE PRESET</span> : Skin the workspace to emulate classic VT100 Green or VT220 Amber phosphors.</p>
+            <p style="margin: 0 0 5px 0;">- <span style="font-weight: bold;">CRT SCANLINES</span> : Overlays a subtle, flickering scanline sync grid to simulate an old glass monitor.</p>
+            <p style="margin: 0 0 5px 0;">- <span style="font-weight: bold;">BLOOM FILTER</span> : Adds a soft, glowing phosphor blur around the characters matching your active terminal color.</p>
+            <p style="margin: 0 0 5px 0;">- <span style="font-weight: bold;">RAMP PRESETS</span> : Rapidly inject stylized character strings (such as Binary blocks or Mathematical equations) into your custom character ramps.</p>
 
             <div style="text-align: center; margin-top: 20px;">
                 <button id="closeHelpBtn" style="border-color: var(--accent-color); color: var(--accent-color); width: 150px; cursor: pointer;">[ CLOSE ]</button>
@@ -447,12 +472,12 @@
         const thresholdContainer = document.getElementById('thresholdContainer');
         const charMode = document.getElementById('charMode');
         const customInput = document.getElementById('customInput');
-        const invertCheck = document.getElementById('invertCheck');
-        const themeCheck = document.getElementById('themeCheck');
         const ditherCheck = document.getElementById('ditherCheck');
         const audioCheck = document.getElementById('audioCheck');
         const fontSizeSlider = document.getElementById('fontSizeSlider');
         const fontSizeValue = document.getElementById('fontSizeValue');
+        const invertCheck = document.getElementById('invertCheck');
+        const themeCheck = document.getElementById('themeCheck');
         
         const terminalPreset = document.getElementById('terminalPreset');
         const scanlineCheck = document.getElementById('scanlineCheck');
@@ -466,6 +491,9 @@
         const borderFrameBtn = document.getElementById('borderFrameBtn');
         const colorFilter = document.getElementById('colorFilter');
         const customMetadataInput = document.getElementById('customMetadataInput');
+        const rampPreset = document.getElementById('rampPreset');
+        const bloomSlider = document.getElementById('bloomSlider');
+        const bloomValue = document.getElementById('bloomValue');
 
         const btnReactPump = document.getElementById('btnReactPump');
         const btnReactFlash = document.getElementById('btnReactFlash');
@@ -531,6 +559,13 @@
             github: 0.48
         };
 
+        const customRampPresets = {
+            binary: " 01",
+            blocks: " ░▒▓█",
+            math: " .+-×÷=≠≈∞√%",
+            minimal: " .,:;!|"
+        };
+
         let img = new Image();
         let video = document.createElement('video');
         video.crossOrigin = "anonymous";
@@ -575,6 +610,9 @@
         let currentAnsiStr = "";
         let currentHtmlStr = "";
         let currentRawHtmlStr = "";
+
+        // Global, real-time volume amplitude cache
+        let currentRms = 0;
 
         // Modular Audio Reactive State Flags
         let reactPumpActive = false;
@@ -626,9 +664,11 @@
                 playbackSpeed: speedSlider.value,
                 colorFilter: colorFilter.value,
                 customMetadata: customMetadataInput.value,
-                recordColorActive
+                recordColorActive,
+                rampPreset: rampPreset.value,
+                bloom: bloomSlider.value
             };
-            localStorage.setItem('ascii_terminal_settings_v9', JSON.stringify(settings));
+            localStorage.setItem('ascii_terminal_settings_v10', JSON.stringify(settings));
         }
 
         function applyPreset(presetName) {
@@ -640,6 +680,12 @@
             root.style.setProperty('--accent-color', p.accent);
             root.style.setProperty('--border-color', p.border);
             root.style.setProperty('--pre-color', p.pre);
+            
+            // Reapply bloom styling utilizing the newly assigned active accent color variable
+            const bloomVal = parseInt(bloomSlider.value);
+            if (bloomVal > 0) {
+                root.style.setProperty('--bloom-glow', `0 0 ${bloomVal}px var(--accent-color)`);
+            }
         }
 
         // Duotone mapping processor calculated based on gray-luminance values
@@ -660,7 +706,7 @@
         }
 
         function loadSettings() {
-            const data = localStorage.getItem('ascii_terminal_settings_v9');
+            const data = localStorage.getItem('ascii_terminal_settings_v10');
             if (!data) return;
             try {
                 const s = JSON.parse(data);
@@ -715,6 +761,10 @@
 
                 recordColorActive = !!s.recordColorActive;
 
+                rampPreset.value = s.rampPreset || 'custom';
+                bloomSlider.value = s.bloom || 0;
+                bloomValue.textContent = s.bloom || 0;
+
                 // Sync aspect preset slider lock
                 if (aspectPreset.value !== 'manual') {
                     ratioSlider.disabled = true;
@@ -746,7 +796,10 @@
 
                 document.body.classList.toggle('light-theme', themeCheck.checked);
                 thresholdContainer.style.display = charMode.value === 'braille' ? 'flex' : 'none';
+                
                 customInput.style.display = charMode.value === 'custom' ? 'inline-block' : 'none';
+                rampPreset.style.display = charMode.value === 'custom' ? 'inline-block' : 'none';
+
                 outputContainer.classList.toggle('scanlines', scanlineCheck.checked);
                 reactiveControls.style.display = reactiveCheck.checked ? 'flex' : 'none';
                 applyPreset(terminalPreset.value);
@@ -760,7 +813,7 @@
                 audioCheck, charLimitInput, exportFormat, exportFps,
                 startTimeInput, endTimeInput, terminalPreset, scanlineCheck,
                 reactiveCheck, fontSizeSlider, aspectPreset, corruptionSlider, visType,
-                speedSlider, colorFilter, customMetadataInput
+                speedSlider, colorFilter, customMetadataInput, rampPreset, bloomSlider
             ];
             inputs.forEach(input => {
                 input.addEventListener('change', saveSettings);
@@ -1268,33 +1321,25 @@ output.innerHTML = frames[0];
                 lastDrawTime = timestamp;
             }
 
-            // Cumulative audio-reactive system updates
-            if (isVideo && audioCheck.checked && reactiveCheck.checked && analyserNode) {
-                analyserNode.getByteTimeDomainData(audioDataArray);
-                let sum = 0;
-                for (let i = 0; i < audioDataArray.length; i++) {
-                    let val = (audioDataArray[i] - 128) / 128;
-                    sum += val * val;
-                }
-                let rms = Math.sqrt(sum / audioDataArray.length);
-
+            // Cumulative audio-reactive system transform/filter updates
+            if (isVideo && audioCheck.checked && reactiveCheck.checked) {
                 let transformStr = "";
                 let filterStr = "";
 
                 if (reactPumpActive) {
-                    const scale = 1 + rms * 0.15;
+                    const scale = 1 + currentRms * 0.15;
                     transformStr += `scale(${scale}) `;
                 }
                 if (reactGlitchActive) {
-                    if (rms > 0.12) {
-                        const dx = (Math.random() - 0.5) * rms * 30;
-                        const dy = (Math.random() - 0.5) * rms * 30;
+                    if (currentRms > 0.12) {
+                        const dx = (Math.random() - 0.5) * currentRms * 30;
+                        const dy = (Math.random() - 0.5) * currentRms * 30;
                         transformStr += `translate(${dx}px, ${dy}px) skewX(${(Math.random() - 0.5) * 10}deg) `;
                     }
                 }
                 if (reactFlashActive) {
-                    const brightness = 1 + rms * 1.5;
-                    const contrast = 100 + rms * 150;
+                    const brightness = 1 + currentRms * 1.5;
+                    const contrast = 100 + currentRms * 150;
                     filterStr += `brightness(${brightness}) contrast(${contrast}%) `;
                 }
 
@@ -1425,6 +1470,26 @@ output.innerHTML = frames[0];
             debouncedDraw();
         });
 
+        rampPreset.addEventListener('change', (e) => {
+            const val = e.target.value;
+            if (val !== 'custom') {
+                customInput.value = customRampPresets[val];
+            }
+            saveSettings();
+            debouncedDraw();
+        });
+
+        bloomSlider.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value);
+            bloomValue.textContent = val;
+            if (val > 0) {
+                document.documentElement.style.setProperty('--bloom-glow', `0 0 ${val}px var(--accent-color)`);
+            } else {
+                document.documentElement.style.setProperty('--bloom-glow', 'none');
+            }
+            saveSettings();
+        });
+
         // Binary Toggle Event Observers
         btnReactPump.addEventListener('click', () => {
             reactPumpActive = !reactPumpActive;
@@ -1458,7 +1523,10 @@ output.innerHTML = frames[0];
         themeCheck.addEventListener('change', (e) => { document.body.classList.toggle('light-theme', e.target.checked); });
         charMode.addEventListener('change', (e) => {
             thresholdContainer.style.display = e.target.value === 'braille' ? 'flex' : 'none';
+            
             customInput.style.display = e.target.value === 'custom' ? 'inline-block' : 'none';
+            rampPreset.style.display = e.target.value === 'custom' ? 'inline-block' : 'none';
+
             if(e.target.value === 'braille' && parseFloat(ratioSlider.value) < 0.48) {
                 ratioSlider.value = 0.50;
                 ratioValue.textContent = "0.50";
@@ -1482,7 +1550,8 @@ output.innerHTML = frames[0];
             const mode = charMode.value;
             const invert = invertCheck.checked;
             const dither = ditherCheck.checked;
-            const corruption = parseInt(corruptionSlider.value);
+            
+            let corruption = parseInt(corruptionSlider.value);
             
             let asciiStr = "";
             let ansiStr = "";
@@ -1497,6 +1566,23 @@ output.innerHTML = frames[0];
 
             // Clear the frame color cache
             currentFrameColors = [];
+
+            // Centralized Web Audio analysis step
+            currentRms = 0;
+            if (isVideo && audioCheck.checked && analyserNode) {
+                analyserNode.getByteTimeDomainData(audioDataArray);
+                let sum = 0;
+                for (let i = 0; i < audioDataArray.length; i++) {
+                    let val = (audioDataArray[i] - 128) / 128;
+                    sum += val * val;
+                }
+                currentRms = Math.sqrt(sum / audioDataArray.length);
+            }
+
+            // Real-Time Audio-Reactive Glitch Tearing and Character Corruption Modulator
+            if (isVideo && audioCheck.checked && reactiveCheck.checked && reactGlitchActive && analyserNode && !video.paused) {
+                corruption = Math.min(100, corruption + Math.round(currentRms * 150));
+            }
 
             if (mode === 'braille') {
                 const outHeightChars = Math.floor((sHeight / sWidth) * outWidthChars * fontAspectRatio);
